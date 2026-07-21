@@ -324,7 +324,7 @@ fn shape_run(
         }
     }
 
-    log::trace!("      Run {:?}: '{}'", &scripts, &line[start_run..end_run],);
+    log::trace!("      Run {:?}: '{}'", scripts, &line[start_run..end_run],);
 
     let attrs = attrs_list.get_span(start_run);
 

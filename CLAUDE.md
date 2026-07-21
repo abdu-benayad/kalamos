@@ -63,6 +63,23 @@ load-bearing: for years the only lint was lib-scoped, so tests and benches drift
 completely unchecked and accumulated 22 errors nobody saw. A gate that skips
 targets is how that happened.
 
+**CI lints under a newer toolchain than you probably have.** GitHub's runner ships
+whatever stable is current, and `ci.sh` runs `-D warnings` — so a Rust release that
+adds a lint turns CI red on code that was green locally. This has already happened
+once (`useless_borrows_in_formatting`, new in 1.97, invisible to a 1.95 clippy). It
+is working as intended, and the fixes are usually one line. To reproduce CI exactly
+before pushing:
+
+```bash
+rustup toolchain install <ci-version>          # installs alongside; default unchanged
+cargo +<ci-version> clippy --all-features --all-targets --no-deps -- -D warnings
+```
+
+The toolchain is deliberately **not** pinned. A `rust-toolchain.toml` in a published
+library forces that exact version on everyone who clones it, and it would bank new
+lints as silent debt instead of surfacing them. An occasional one-line red is the
+cheaper trade.
+
 ## Traps
 
 **`src/swash.rs` is not swash.** It is this crate's ~300-line adapter *around* the
