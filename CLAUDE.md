@@ -113,11 +113,13 @@ the suite.
 
 - **crates.io `0.1.0` predates most of this repo** — it was published before the
   example retirement, the lint work and the README rewrite. A `0.1.1` syncs it.
-- **GitHub Actions is red**, and it is a workflow problem, not a code one:
-  `.github/workflows/rust.yml` uses `actions-rs/clippy-check@v1` (archived since
-  2023) which needs `checks: write`, and `pages.yml` needs `contents: write`.
-  New repos default `GITHUB_TOKEN` to read-only, so both fail permissions before
-  `ci.sh` ever runs. `ci.sh` itself passes locally.
+- **GitHub Actions was red on workflow permissions, not code** — fixed in the
+  tree, unverified until the next push. `rust.yml` ran `actions-rs/clippy-check@v1`
+  (archived 2023, needs `checks: write`) and a `pages.yml` deployed rustdoc
+  (needs `contents: write`); new repos default `GITHUB_TOKEN` to read-only, so
+  both failed before `ci.sh` ever started. The clippy step is gone — `ci.sh`
+  already lints strictly — `pages.yml` is deleted since docs.rs serves the docs,
+  and the workflow now declares `permissions: contents: read` explicitly.
 - **Zero examples.** Five inherited demos on winit 0.29 / orbclient were retired;
   nothing replaced them. An RTL-first example written *for* this library is the
   gap.

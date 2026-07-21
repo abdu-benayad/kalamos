@@ -9,23 +9,29 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Nothing here writes back to the repository. Declaring it keeps a step that
+# quietly wants more scope from being added without the change being noticed.
+permissions:
+  contents: read
+
 jobs:
   cargo-deny:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: EmbarkStudios/cargo-deny-action@v2
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         lfs: true
     - name: Checkout LFS objects
       run: git lfs checkout
-    - uses: actions-rs/clippy-check@v1
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        args: --all-features
+    # An actions-rs/clippy-check@v1 step used to run here. It was archived in
+    # 2023, it duplicated a lint ci.sh already runs, and it needs `checks: write`
+    # to post annotations — which a default GITHUB_TOKEN does not grant, so it
+    # failed the whole job before ci.sh ever started. ci.sh lints every feature
+    # combination and every target under -D warnings; that is the gate.
     - name: Run Rust CI
       run: ./ci.sh
