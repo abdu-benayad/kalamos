@@ -1,6 +1,6 @@
-use cosmic_text as ct;
-use cosmic_text::BidiParagraphs;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use kalamos as ct;
+use kalamos::BidiParagraphs;
 
 fn bench_ascii_fast_path(c: &mut Criterion) {
     let mut fs = ct::FontSystem::new();

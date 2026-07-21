@@ -1,6 +1,6 @@
 use common::DrawTestCfg;
-use cosmic_text::Attrs;
 use fontdb::Family;
+use kalamos::Attrs;
 
 mod common;
 
@@ -76,7 +76,7 @@ fn test_english_mixed_with_arabic_paragraph_rendering() {
 
 #[test]
 fn test_ligature_segmentation() {
-    use cosmic_text::{Buffer, FontSystem, Metrics, Shaping};
+    use kalamos::{Buffer, FontSystem, Metrics, Shaping};
 
     let mut font_system =
         FontSystem::new_with_locale_and_db("en-US".into(), fontdb::Database::new());

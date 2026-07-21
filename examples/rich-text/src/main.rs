@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use cosmic_text::BorrowedWithFontSystem;
-use cosmic_text::CacheKeyFlags;
-use cosmic_text::Color;
-use cosmic_text::Editor;
-use cosmic_text::Shaping;
-use cosmic_text::Style;
-use cosmic_text::{
+use kalamos::BorrowedWithFontSystem;
+use kalamos::CacheKeyFlags;
+use kalamos::Color;
+use kalamos::Editor;
+use kalamos::Shaping;
+use kalamos::Style;
+use kalamos::{
     Action, Attrs, Buffer, Edit, Family, FontSystem, Metrics, Motion, SwashCache, Weight,
 };
 use std::{num::NonZeroU32, rc::Rc, slice};

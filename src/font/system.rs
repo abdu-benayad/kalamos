@@ -201,7 +201,7 @@ impl FontSystem {
 
     /// Create a new [`FontSystem`] backed by a persistent on-disk system-font index cache
     /// at the platform's conventional cache location
-    /// (e.g. `$XDG_CACHE_HOME/cosmic-text/fonts.cache`).
+    /// (e.g. `$XDG_CACHE_HOME/kalamos/fonts.cache`).
     ///
     /// Falls back to a normal, uncached scan if no cache directory can be determined.
     #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
@@ -211,7 +211,7 @@ impl FontSystem {
 
     /// Returns the default system-font cache file path used by [`FontSystem::new_cached`]
     /// and [`FontSystem::new_with_fonts_and_cache`]
-    /// (`<cache-dir>/cosmic-text/fonts.cache`, following the platform's conventional cache
+    /// (`<cache-dir>/kalamos/fonts.cache`, following the platform's conventional cache
     /// directory).
     ///
     /// Returns `None` if no cache directory can be determined from the environment.

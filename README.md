@@ -1,20 +1,44 @@
-# COSMIC Text
+# Kalamos
 
-[![crates.io](https://img.shields.io/crates/v/cosmic-text.svg)](https://crates.io/crates/cosmic-text)
-[![docs.rs](https://docs.rs/cosmic-text/badge.svg)](https://docs.rs/cosmic-text)
-![license](https://img.shields.io/crates/l/cosmic-text.svg)
-[![Rust workflow](https://github.com/pop-os/cosmic-text/workflows/Rust/badge.svg?event=push)](https://github.com/pop-os/cosmic-text/actions)
+[![crates.io](https://img.shields.io/crates/v/kalamos.svg)](https://crates.io/crates/kalamos)
+[![docs.rs](https://docs.rs/kalamos/badge.svg)](https://docs.rs/kalamos)
+![license](https://img.shields.io/crates/l/kalamos.svg)
 
-Pure Rust multi-line text handling.
+**RTL-first text shaping, bidirectional layout, and rasterization in pure Rust.**
 
-COSMIC Text provides advanced text shaping, layout, and rendering wrapped up
-into a simple abstraction. Shaping is provided by HarfRust, and supports a
-wide variety of advanced shaping operations. Rendering is provided by swash,
-which supports ligatures and color emoji. Layout is implemented custom, in safe
-Rust, and supports bidirectional text. Font fallback is also a custom
-implementation, reusing some of the static fallback lists in browsers such as
-Chromium and Firefox. Linux, macOS, and Windows are supported with the full
-feature set. Other platforms may need to implement font fallback capabilities.
+*κάλαμος* — the reed pen. The Arabic *qalam* is borrowed from it: the word itself
+crossed the boundary this library exists to span.
+
+Kalamos provides text shaping, layout, and rendering behind one abstraction.
+Shaping is HarfRust, and supports the full range of advanced shaping operations.
+Rasterization is swash, with ligatures and colour emoji. Layout and font fallback
+are custom, in safe Rust. Linux, macOS, and Windows are supported with the full
+feature set; other platforms may need to supply their own font fallback.
+
+## Right-to-left is a requirement, not a feature flag
+
+Kalamos treats bidirectional and right-to-left correctness as the primary design
+constraint rather than a case to be handled. In practice that means:
+
+- **Base direction is forced, never guessed.** A field's bidi base can be set
+  explicitly instead of inferred from content, so a mixed-script value does not
+  silently reverse when its first strong character changes.
+- **Direction-independent glyph positions.** Lines pin to logical-left alignment,
+  so the caller owns cell alignment and there is no double-offset when an RTL line
+  is laid out inside a finite width.
+- **Ellipsization that does not eat runs.** Constraining a line to a width must not
+  delete its logically-leading run — a defect that leaves the reported line width
+  and the glyph extents mutually consistent, and therefore invisible to every
+  geometric check. Regression-guarded by glyph census, not geometry.
+- **Caret and hit-testing that respect run boundaries,** including affinity at the
+  seam between opposing runs.
+
+## Lineage
+
+Kalamos began as a fork of [cosmic-text](https://github.com/pop-os/cosmic-text) by
+Jeremy Soller and System76, and carries their copyright alongside its own under the
+original MIT / Apache-2.0 dual licence. It is now maintained independently: it does
+not track upstream, and upstream is not responsible for it. Bugs here are ours.
 
 ## Screenshots
 
@@ -73,7 +97,7 @@ The following features must be supported before this is "ready":
 The UDHR (Universal Declaration of Human Rights) test involves taking the entire
 set of UDHR translations (almost 500 languages), concatenating them as one file
 (which ends up being 8 megabytes!), then via the `editor-test` example,
-automatically simulating the entry of that file into cosmic-text per-character,
+automatically simulating the entry of that file into kalamos per-character,
 with the use of backspace and delete tested per character and per line. Then,
 the final contents of the buffer is compared to the original file. All of the
 106746 lines are correct.

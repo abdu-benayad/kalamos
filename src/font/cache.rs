@@ -22,8 +22,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-/// Magic bytes identifying a cosmic-text font cache file (`C`osmic `T`ext `F`ont `C`ache).
-const MAGIC: [u8; 4] = *b"CTFC";
+/// Magic bytes identifying a kalamos font cache file (`K`a`L`a`M`os `C`ache).
+const MAGIC: [u8; 4] = *b"KLMC";
 
 /// Cache format version. Bump whenever the on-disk layout changes so that stale caches
 /// written by an older version are rejected instead of misparsed.
@@ -60,12 +60,12 @@ pub(crate) fn load_system_fonts_cached(db: &mut Database, cache_path: &Path) {
     }
 }
 
-/// Returns the default cache file path (`<cache-dir>/cosmic-text/fonts.cache`), following
+/// Returns the default cache file path (`<cache-dir>/kalamos/fonts.cache`), following
 /// the platform's conventional cache directory. Returns `None` if no cache directory can
 /// be determined from the environment.
 pub(crate) fn default_cache_path() -> Option<PathBuf> {
     let mut dir = cache_dir()?;
-    dir.push("cosmic-text");
+    dir.push("kalamos");
     dir.push("fonts.cache");
     Some(dir)
 }
@@ -185,7 +185,7 @@ fn write(db: &Database, cache_path: &Path) -> std::io::Result<()> {
     let mut faces: Vec<(u32, &FaceInfo)> = Vec::new();
 
     for face in db.faces() {
-        // cosmic-text's `std` feature always enables `fontdb/memmap`
+        // kalamos's `std` feature always enables `fontdb/memmap`
         let path = match &face.source {
             Source::File(path) => path,
             Source::SharedFile(path, _) => path,

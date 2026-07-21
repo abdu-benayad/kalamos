@@ -1,4 +1,4 @@
-use cosmic_text::{
+use kalamos::{
     fontdb, Attrs, Buffer, Direction, Ellipsize, EllipsizeHeightLimit, FontSystem, Metrics,
     Shaping, Wrap,
 };

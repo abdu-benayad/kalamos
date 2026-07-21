@@ -1,4 +1,4 @@
-use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping, Wrap};
+use kalamos::{Attrs, Buffer, FontSystem, Metrics, Shaping, Wrap};
 
 // Tests the ability to fallback to glyph wrapping when a word can't fit on a line by itself.
 // No line should ever overflow the buffer size.
@@ -16,7 +16,7 @@ fn wrap_word_fallback() {
 
     buffer.set_wrap(Wrap::WordOrGlyph);
     buffer.set_size(Some(50.0), Some(1000.0));
-    buffer.set_text("Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.", &Attrs::new().family(cosmic_text::Family::Name("Inter")), Shaping::Advanced, None);
+    buffer.set_text("Lorem ipsum dolor sit amet, qui minim labore adipisicing minim sint cillum sint consectetur cupidatat.", &Attrs::new().family(kalamos::Family::Name("Inter")), Shaping::Advanced, None);
 
     let measured_size = buffer
         .layout_runs()

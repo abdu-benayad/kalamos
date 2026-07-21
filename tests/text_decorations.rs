@@ -1,5 +1,5 @@
 use common::DrawTestCfg;
-use cosmic_text::{Attrs, Color, Family, UnderlineStyle};
+use kalamos::{Attrs, Color, Family, UnderlineStyle};
 
 mod common;
 

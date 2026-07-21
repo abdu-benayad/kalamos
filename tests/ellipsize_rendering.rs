@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use common::DrawTestCfg;
-use cosmic_text::{
+use kalamos::{
     fontdb::Database, Align, Attrs, Buffer, Ellipsize, EllipsizeHeightLimit, Family, FontSystem,
     Metrics, Shaping, Wrap,
 };

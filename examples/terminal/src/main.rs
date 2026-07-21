@@ -4,7 +4,7 @@
 //! or `cargo run --package terminal -- "my own text"`
 
 use colored::Colorize;
-use cosmic_text::{Attrs, Buffer, Color, FontSystem, Metrics, Shaping, SwashCache};
+use kalamos::{Attrs, Buffer, Color, FontSystem, Metrics, Shaping, SwashCache};
 use std::fmt::Write;
 
 fn main() {

@@ -1,4 +1,4 @@
-use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping};
+use kalamos::{Attrs, Buffer, FontSystem, Metrics, Shaping};
 
 // Test for https://github.com/pop-os/cosmic-text/issues/364
 //

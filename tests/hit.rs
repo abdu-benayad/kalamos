@@ -1,4 +1,4 @@
-use cosmic_text::{fontdb, Align, Attrs, Buffer, FontSystem, Metrics, Shaping, Wrap};
+use kalamos::{fontdb, Align, Attrs, Buffer, FontSystem, Metrics, Shaping, Wrap};
 
 fn font_system() -> FontSystem {
     let mut font_system =

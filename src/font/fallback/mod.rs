@@ -34,7 +34,7 @@ mod platform;
 ///
 /// ```rust
 /// # use unicode_script::Script;
-/// # use cosmic_text::{Fallback, FontSystem};
+/// # use kalamos::{Fallback, FontSystem};
 /// struct MyFallback;
 /// impl Fallback for MyFallback {
 ///     fn common_fallback(&self) -> &[&'static str] {

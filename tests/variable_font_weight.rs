@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use cosmic_text::{fontdb, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Weight};
+use kalamos::{fontdb, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Weight};
 
 /// Variable fonts must be matched at all weights within their `wght` axis
 /// range, not just the default weight they register at in fontdb, otherwise

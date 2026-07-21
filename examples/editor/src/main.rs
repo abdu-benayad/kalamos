@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use cosmic_text::{
+use kalamos::{
     Action, Attrs, Buffer, Edit, Family, FontSystem, Metrics, Motion, SwashCache, SyntaxEditor,
     SyntaxSystem,
 };

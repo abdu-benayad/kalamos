@@ -1,12 +1,17 @@
 [package]
-name = "cosmic-text"
-description = "Pure Rust multi-line text handling"
-version = "0.19.0"
-authors = ["Jeremy Soller <jeremy@system76.com>"]
+name = "kalamos"
+description = "RTL-first text shaping, bidirectional layout, and rasterization"
+version = "0.1.0"
+authors = [
+    "abdulbari Ben ayad <abdu.benayad@gmail.com>",
+    "Jeremy Soller <jeremy@system76.com>",
+]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-documentation = "https://docs.rs/cosmic-text/latest/cosmic_text/"
-repository = "https://github.com/pop-os/cosmic-text"
+documentation = "https://docs.rs/kalamos/latest/kalamos/"
+repository = "https://github.com/abdu-benayad/kalamos"
+keywords = ["text", "rtl", "bidi", "shaping", "layout"]
+categories = ["text-processing", "graphics", "gui"]
 rust-version = "1.89"
 
 [dependencies]

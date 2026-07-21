@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use cosmic_text::{
+use kalamos::{
     fontdb::Database, Align, Attrs, AttrsOwned, Buffer, Color, Ellipsize, Family, FontSystem,
     Metrics, Shaping, SwashCache, Wrap,
 };
