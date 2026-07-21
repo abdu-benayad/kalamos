@@ -2,10 +2,7 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
-// The `no_std` feature supplies the dependency; `not(std)` is what decides the
-// trait is actually needed, since under std these float methods are inherent.
-// Gating on the feature alone makes the import dead whenever both are enabled.
-#[cfg(all(feature = "no_std", not(feature = "std")))]
+#[cfg(not(feature = "std"))]
 use core_maths::CoreFloat;
 
 use core::fmt;

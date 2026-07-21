@@ -2,7 +2,7 @@
 
 function build {
     cargo build --release "$@"
-    cargo clippy --no-deps "$@"
+    cargo clippy --no-deps "$@" -- -D warnings
 }
 
 set -ex
@@ -34,6 +34,12 @@ build --no-default-features --features std,vi
 
 echo Build with all features
 build --all-features
+
+echo Lint every target, warnings denied
+# The per-feature lints above build the library only. Tests and benches are
+# separate targets, so nothing above ever compiled them under clippy and they
+# drifted unchecked. This is the gate that keeps them honest.
+cargo clippy --all-features --all-targets --no-deps -- -D warnings
 
 echo Run tests
 cargo test --all-features

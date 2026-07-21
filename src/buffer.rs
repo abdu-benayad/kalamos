@@ -5,8 +5,6 @@ use alloc::{string::String, vec::Vec};
 
 use core::{cmp, fmt};
 
-#[cfg(not(feature = "std"))]
-use core_maths::CoreFloat;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
