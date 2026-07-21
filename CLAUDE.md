@@ -5,8 +5,9 @@ Guidance for Claude Code working in this repository.
 ## What this is
 
 **kalamos** — RTL-first text shaping, bidirectional layout, and rasterization.
-Published on crates.io as `kalamos`; the name is Greek (*κάλαμος*, "reed pen").
-Its first consumer is `abdu-egui-ui` (at `../abdu-egui-ui`).
+The name is Greek (*κάλαμος*, "reed pen"). Its first consumer is `abdu-egui-ui`
+(at `../abdu-egui-ui`), which depends on kalamos **by git, not by version** — see
+Distribution below.
 
 It is a **hard fork of cosmic-text**, not a patch series on top of one. The RTL
 correctness work had nowhere to go: pop-os/cosmic-text's PR template requires
@@ -28,6 +29,25 @@ because the retired `cosmic-text-rtl` crate still needs a tombstone release.
 **Commit identity is `abdulbari Ben ayad <abdu.benayad@gmail.com>` with no
 Claude co-author trailer.** The repo-local git config is already set, so a plain
 `git commit` is correct — do not add a trailer, and do not override the author.
+
+## Distribution — kalamos is not published to crates.io
+
+**kalamos will not be published to crates.io.** This is a settled policy, not a
+pending chore. The existing crates.io `0.1.0` is a frozen artifact of the old
+publish habit; **no `0.1.1` or later will follow it, and it should be treated as
+abandoned.** Consumers depend on kalamos **by git** (or a local `path` during
+development), never by a crates.io version. The reasons: this is a personal RTL
+fork, not a crate courting downstream users; and a git dependency iterates
+without publish latency, version churn, or the "sync the published copy" busywork
+that a published library imposes.
+
+**Entailment for `abdu-egui-ui`.** crates.io refuses to publish a manifest that
+carries a `git` or `path` dependency — every dependency of a published crate must
+itself resolve from crates.io. So once `abdu-egui-ui` depends on kalamos by git,
+`abdu-egui-ui` **can no longer be published to crates.io either**. That is an
+accepted consequence of this policy, not an oversight: the whole `abdu-egui-ui` +
+kalamos stack distributes by git, not by crates.io. Do not "fix" a git dependency
+back to a version to make `cargo publish` work — the git dependency is the intent.
 
 ## Why the fork exists — the RTL work
 
@@ -128,8 +148,11 @@ the suite.
 
 ## Current state / open work
 
-- **crates.io `0.1.0` predates most of this repo** — it was published before the
-  example retirement, the lint work and the README rewrite. A `0.1.1` syncs it.
+- **crates.io `0.1.0` is abandoned, not to be synced.** It predates most of this
+  repo (published before the example retirement, the lint work and the README
+  rewrite), but there is no `0.1.1`: kalamos is not published to crates.io going
+  forward — see Distribution. The migration that *is* open is repointing
+  `abdu-egui-ui` from the retired `cosmic-text-rtl 0.19` crate onto kalamos by git.
 - **GitHub Actions was red on workflow permissions, not code** — fixed in the
   tree, unverified until the next push. `rust.yml` ran `actions-rs/clippy-check@v1`
   (archived 2023, needs `checks: write`) and a `pages.yml` deployed rustdoc
