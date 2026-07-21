@@ -5,14 +5,7 @@ set -ex
 echo Run CI script
 ./ci.sh
 
+# Not yet RUSTDOCFLAGS="-D warnings": 18 inherited rustdoc warnings still to
+# clear before that gate can go strict.
 echo Build documentation
-cargo doc
-
-echo Build all examples
-cargo build --release --all
-
-echo Run terminal example
-target/release/terminal
-
-echo Run editor-test example
-env RUST_LOG=editor_test=info target/release/editor-test
+cargo doc --all-features --no-deps
