@@ -80,8 +80,10 @@ harness = false
 name = "text_shaping_benchmarks"
 harness = false
 
+# Deliberately memberless: kalamos is one library crate and stays one. The
+# section is kept so cargo treats this directory as the workspace root rather
+# than walking up the tree looking for a parent.
 [workspace]
-members = ["examples/*"]
 
 [dev-dependencies]
 tiny-skia = "0.11.4"

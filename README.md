@@ -94,13 +94,17 @@ The following features must be supported before this is "ready":
     - [x] no_std layout
     - [ ] no_std rendering
 
-The UDHR (Universal Declaration of Human Rights) test involves taking the entire
-set of UDHR translations (almost 500 languages), concatenating them as one file
-(which ends up being 8 megabytes!), then via the `editor-test` example,
-automatically simulating the entry of that file into kalamos per-character,
-with the use of backspace and delete tested per character and per line. Then,
-the final contents of the buffer is compared to the original file. All of the
-106746 lines are correct.
+The UDHR (Universal Declaration of Human Rights) result above was established
+upstream in cosmic-text: the whole set of UDHR translations (almost 500
+languages) concatenated into a single 8 MB file, entered into the buffer
+per-character with backspace and delete exercised per character and per line,
+then compared back against the original — all 106746 lines correct.
+
+Kalamos inherits the layout and editing code that passed it, but not the
+harness. That harness was a windowed `orbclient` demo, so it could never run
+headless or in CI; it was dropped along with the other inherited example apps.
+Re-landing UDHR as a headless regression test under `tests/` is open work, and
+until it lands this paragraph is provenance, not a result this crate reproduces.
 
 ## License
 
