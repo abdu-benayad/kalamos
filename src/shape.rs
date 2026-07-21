@@ -5,9 +5,12 @@
 use crate::fallback::FontFallbackIter;
 use crate::{
     math, Align, Attrs, AttrsList, CacheKeyFlags, Color, DecorationMetrics, DecorationSpan,
-    Ellipsize, EllipsizeHeightLimit, Family, Font, FontSystem, GlyphDecorationData, Hinting,
-    LayoutGlyph, LayoutLine, Metrics, Wrap,
+    Ellipsize, EllipsizeHeightLimit, Font, FontSystem, GlyphDecorationData, Hinting, LayoutGlyph,
+    LayoutLine, Metrics, Wrap,
 };
+// Only the swash-gated fallback path names a family directly.
+#[cfg(feature = "swash")]
+use crate::Family;
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec, vec::Vec};
 
@@ -2904,6 +2907,12 @@ impl ShapeLine {
                     // emitted in byte order, giving amortized O(1) lookup.
                     let mut deco_cursor: usize = 0;
                     // If ending_glyph is not 0 we need to include glyphs from the ending_word
+                    #[expect(
+                        clippy::needless_range_loop,
+                        reason = "the index is compared against r.start.word and r.end.word to \
+                                  decide which end of the word is clipped, so it carries meaning \
+                                  beyond indexing span_words"
+                    )]
                     for i in r.start.word..r.end.word + usize::from(r.end.glyph != 0) {
                         let word = &span_words[i];
                         let included_glyphs = match (i == r.start.word, i == r.end.word) {

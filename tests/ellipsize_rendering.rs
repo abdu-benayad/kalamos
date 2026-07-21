@@ -1,10 +1,5 @@
-use std::path::PathBuf;
-
 use common::DrawTestCfg;
-use kalamos::{
-    fontdb::Database, Align, Attrs, Buffer, Ellipsize, EllipsizeHeightLimit, Family, FontSystem,
-    Metrics, Shaping, Wrap,
-};
+use kalamos::{Align, Attrs, Ellipsize, EllipsizeHeightLimit, Family, Wrap};
 
 mod common;
 

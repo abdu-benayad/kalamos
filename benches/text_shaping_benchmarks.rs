@@ -1,6 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use kalamos as ct;
 use kalamos::BidiParagraphs;
+use std::hint::black_box;
 
 fn bench_ascii_fast_path(c: &mut Criterion) {
     let mut fs = ct::FontSystem::new();
@@ -54,7 +55,7 @@ fn bench_lang_mixed(c: &mut Criterion) {
         .bench_function("ShapeLine/Mixed-Language Text", |b| {
             b.iter(|| {
                 buffer.set_text(
-                    black_box(&bidi_text),
+                    black_box(bidi_text),
                     &ct::Attrs::new(),
                     ct::Shaping::Advanced,
                     None,
@@ -114,7 +115,7 @@ fn bench_bidi_paragraphs_ascii(c: &mut Criterion) {
 
     c.bench_function("BidiParagraphs/ASCII", |b| {
         b.iter(|| {
-            let paras = BidiParagraphs::new(black_box(&ascii_text));
+            let paras = BidiParagraphs::new(black_box(ascii_text.as_str()));
             black_box(paras.count());
         });
     });
@@ -125,7 +126,7 @@ fn bench_bidi_paragraphs_mixed(c: &mut Criterion) {
 
     c.bench_function("BidiParagraphs/Mixed", |b| {
         b.iter(|| {
-            let paras = BidiParagraphs::new(black_box(&mixed_text));
+            let paras = BidiParagraphs::new(black_box(mixed_text.as_str()));
             black_box(paras.count());
         });
     });

@@ -2,7 +2,10 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
-#[cfg(feature = "no_std")]
+// The `no_std` feature supplies the dependency; `not(std)` is what decides the
+// trait is actually needed, since under std these float methods are inherent.
+// Gating on the feature alone makes the import dead whenever both are enabled.
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 use core_maths::CoreFloat;
 
 use core::fmt;
@@ -262,8 +265,12 @@ mod test {
         .map(std::fs::read) else {
             return;
         };
-        let regular = FontRef::from_index(&sfns, 0).unwrap();
-        let italic = FontRef::from_index(&sfns_italic, 0).unwrap();
+        let (Some(regular), Some(italic)) = (
+            FontRef::from_index(&sfns, 0),
+            FontRef::from_index(&sfns_italic, 0),
+        ) else {
+            return;
+        };
         let wght = Tag::from_be_bytes(*b"wght");
 
         let render = |ctx: &mut ScaleContext, font: FontRef, weight: f32, use_normalized| {

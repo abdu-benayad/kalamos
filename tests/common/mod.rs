@@ -1,3 +1,8 @@
+// This module is compiled into several test binaries and no single one uses
+// every helper. `expect` is wrong here — it would fire
+// `unfulfilled_lint_expectation` in the binaries that do use them.
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 
 use kalamos::{
