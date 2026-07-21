@@ -13,6 +13,10 @@ repository = "https://github.com/abdu-benayad/kalamos"
 keywords = ["text", "rtl", "bidi", "shaping", "layout"]
 categories = ["text-processing", "graphics", "gui"]
 rust-version = "1.89"
+# Binary fixtures live in git-lfs and are only needed to run this crate's own
+# tests and render its screenshots. Excluding them keeps the published artifact
+# source-only; clone the repo to run the suite.
+exclude = ["fonts/*", "screenshots/*", "tests/images/*"]
 
 [dependencies]
 bitflags = "2.10.0"
