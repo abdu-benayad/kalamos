@@ -747,9 +747,23 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                         Cursor::new(line_i, after_whitespace),
                     );
 
+                    // An index at or past the deleted run shifts back by the
+                    // run's width; an index inside the run clamps to the
+                    // deletion start (subtracting the full width there would
+                    // underflow).
+                    let adjust = |index: usize| {
+                        if index >= after_whitespace {
+                            index - (after_whitespace - last_indent)
+                        } else if index > last_indent {
+                            last_indent
+                        } else {
+                            index
+                        }
+                    };
+
                     // Adjust cursor
-                    if self.cursor.line == line_i && self.cursor.index > last_indent {
-                        self.cursor.index -= after_whitespace - last_indent;
+                    if self.cursor.line == line_i {
+                        self.cursor.index = adjust(self.cursor.index);
                     }
 
                     // Adjust selection
@@ -758,8 +772,8 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                         Selection::Normal(ref mut select)
                         | Selection::Line(ref mut select)
                         | Selection::Word(ref mut select) => {
-                            if select.line == line_i && select.index > last_indent {
-                                select.index -= after_whitespace - last_indent;
+                            if select.line == line_i {
+                                select.index = adjust(select.index);
                             }
                         }
                     }
