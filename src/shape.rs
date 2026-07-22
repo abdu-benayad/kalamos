@@ -851,11 +851,34 @@ impl ShapeWord {
 
         if is_simple_ascii && !word.is_empty() && {
             let attrs_start = attrs_list.get_span(word_range.start);
-            attrs_list.spans_iter().all(|(other_range, other_attrs)| {
+            let spans_compatible = attrs_list.spans_iter().all(|(other_range, other_attrs)| {
                 word_range.end <= other_range.start
                     || other_range.end <= word_range.start
                     || attrs_start.compatible(&other_attrs.as_attrs())
-            })
+            });
+            // Explicit spans need not cover the word: get_span resolves
+            // uncovered bytes to the list's defaults, and the slow path
+            // below honors that per grapheme. The fast path may only run
+            // when the spans tile the whole word, or when the defaults
+            // that fill the gaps are themselves compatible — otherwise a
+            // word straddling a span→gap boundary shapes entirely in the
+            // span's font.
+            let gaps_compatible = || {
+                let mut covered_to = word_range.start;
+                // spans_iter is ordered by range (rangemap); the first
+                // span starting past covered_to proves a gap.
+                for (other_range, _) in attrs_list.spans_iter() {
+                    if other_range.end <= word_range.start {
+                        continue;
+                    }
+                    if other_range.start > covered_to || covered_to >= word_range.end {
+                        break;
+                    }
+                    covered_to = covered_to.max(other_range.end);
+                }
+                covered_to >= word_range.end || attrs_start.compatible(&attrs_list.defaults())
+            };
+            spans_compatible && gaps_compatible()
         } {
             shaping.run(
                 &mut glyphs,
