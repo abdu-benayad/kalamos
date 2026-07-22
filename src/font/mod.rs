@@ -246,6 +246,13 @@ impl Font {
 
 #[cfg(test)]
 mod test {
+    #![expect(
+        clippy::expect_used,
+        clippy::print_stdout,
+        reason = "test code: expectations are the test failing, and the load \
+                  time prints to the harness-captured stdout"
+    )]
+
     #[test]
     fn test_fonts_load_time() {
         use crate::FontSystem;

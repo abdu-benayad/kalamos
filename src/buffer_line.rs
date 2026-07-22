@@ -234,7 +234,13 @@ impl BufferLine {
             self.shape_opt.set_used(line);
             self.layout_opt.set_unused();
         }
-        self.shape_opt.get().expect("shape not found")
+        #[expect(
+            clippy::expect_used,
+            reason = "the branch above stored the freshly built ShapeLine with \
+                      set_used whenever the cache was not already populated"
+        )]
+        let shape = self.shape_opt.get().expect("shape not found");
+        shape
     }
 
     /// Get line shaping cache
@@ -280,7 +286,13 @@ impl BufferLine {
             );
             self.layout_opt.set_used(layout);
         }
-        self.layout_opt.get().expect("layout not found")
+        #[expect(
+            clippy::expect_used,
+            reason = "the branch above stored the freshly computed layout with \
+                      set_used whenever the cache was not already populated"
+        )]
+        let layout = self.layout_opt.get().expect("layout not found");
+        layout
     }
 
     /// Get line layout cache

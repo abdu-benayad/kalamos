@@ -75,7 +75,13 @@ impl<T: Clone + Debug> Cached<T> {
     #[allow(clippy::missing_panics_doc)]
     pub fn set_unused(&mut self) {
         if matches!(*self, Self::Used(_)) {
-            *self = Self::Unused(self.take_used().expect("cached value should be used"));
+            #[expect(
+                clippy::expect_used,
+                reason = "take_used returns Some exactly when the value is \
+                          Self::Used, which the surrounding matches! guarantees"
+            )]
+            let used = self.take_used().expect("cached value should be used");
+            *self = Self::Unused(used);
         }
     }
 

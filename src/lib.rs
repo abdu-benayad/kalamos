@@ -54,18 +54,35 @@
 
 // Not interested in these lints
 #![allow(clippy::new_without_default)]
-// TODO: address occurrences and then deny
+// Inherited debt, allowed with eyes open
 //
-// Overflows can produce unpredictable results and are only checked in debug builds
+// 212 sites (measured 2026-07 via --force-warn). Overflows are only checked in
+// debug builds; paydown is per-module and opportunistic, during refactors that
+// touch the arithmetic anyway — not a bulk checked_*/saturating_* sweep, which
+// would bury the few real overflow risks under hundreds of impossible ones.
 #![allow(clippy::arithmetic_side_effects)]
-// Indexing a slice can cause panics and that is something we always want to avoid
+// 134 sites (measured 2026-07 via --force-warn). A blind `x[i]` → `.get(i)`
+// conversion trades silently-correct hot-path code for noisy panic paths or
+// bogus Options; index sites get replaced per-module when their surrounding
+// logic is redesigned, not en masse.
 #![allow(clippy::indexing_slicing)]
 // Soundness issues
 //
 // Dereferencing unaligned pointers may be undefined behavior
 #![deny(clippy::cast_ptr_alignment)]
-// Avoid panicking in without information about the panic. Use expect
+// Avoid panicking without information about the panic — and even with it, a
+// panic is a last resort: every expect() carries an #[expect] with the local
+// invariant that makes the panic unreachable
 #![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
+// A library never panics on purpose, ships no scaffolding, and does not write
+// to a terminal it doesn't own (rasterization diagnostics go through `log`)
+#![deny(clippy::panic)]
+#![deny(clippy::todo)]
+#![deny(clippy::unimplemented)]
+#![deny(clippy::dbg_macro)]
+#![deny(clippy::print_stdout)]
+#![deny(clippy::print_stderr)]
 // Ensure all types have a debug impl
 #![deny(missing_debug_implementations)]
 // This is usually a serious issue - a missing import of a define where it is interpreted

@@ -215,11 +215,15 @@ fn shape_fallback(
                 scratch.shape_plan_cache.pop_front();
             }
             scratch.shape_plan_cache.push_back((font.id(), plan));
-            &scratch
+            #[expect(
+                clippy::expect_used,
+                reason = "back() of the deque push_back just appended to"
+            )]
+            let entry = scratch
                 .shape_plan_cache
                 .back()
-                .expect("we just pushed the shape plan")
-                .1
+                .expect("we just pushed the shape plan");
+            &entry.1
         }
     };
 
@@ -1620,7 +1624,14 @@ impl ShapeLine {
         // <http://www.unicode.org/reports/tr9/#L2>
 
         // Stop at the lowest *odd* level.
-        min_level = min_level.new_lowest_ge_rtl().expect("Level error");
+        #[expect(
+            clippy::expect_used,
+            reason = "new_lowest_ge_rtl fails only above unicode-bidi's \
+                      max_depth, and resolved levels are bounded by it"
+        )]
+        {
+            min_level = min_level.new_lowest_ge_rtl().expect("Level error");
+        }
 
         while max_level >= min_level {
             // Look for the start of a sequence of consecutive elements at max_level or higher.
@@ -1645,9 +1656,17 @@ impl ShapeLine {
 
                 seq_start = seq_end;
             }
-            max_level
-                .lower(1)
-                .expect("Lowering embedding level below zero");
+            #[expect(
+                clippy::expect_used,
+                reason = "the loop guard keeps max_level at or above the lowest \
+                          RTL level, which is at least 1, so lowering by 1 \
+                          cannot go below zero"
+            )]
+            {
+                max_level
+                    .lower(1)
+                    .expect("Lowering embedding level below zero");
+            }
         }
 
         elements
@@ -2235,11 +2254,13 @@ impl ShapeLine {
     /// Returns the words for a given span index, handling the ellipsis sentinel.
     fn get_span_words(&self, span_index: usize) -> &[ShapeWord] {
         if span_index == ELLIPSIS_SPAN {
-            &self
-                .ellipsis_span
-                .as_ref()
-                .expect("ellipsis_span not set")
-                .words
+            #[expect(
+                clippy::expect_used,
+                reason = "ELLIPSIS_SPAN ranges are only committed after \
+                          layout_to_buffer populated ellipsis_span"
+            )]
+            let span = self.ellipsis_span.as_ref().expect("ellipsis_span not set");
+            &span.words
         } else {
             &self.spans[span_index].words
         }

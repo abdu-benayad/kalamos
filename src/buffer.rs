@@ -610,6 +610,11 @@ impl Buffer {
 
         let mut layout_y = 0.0;
         let mut total_height = {
+            #[expect(
+                clippy::expect_used,
+                reason = "line_layout is None only for an out-of-bounds index, and \
+                          layout_cursor() just resolved this line against self.lines"
+            )]
             let layout = self
                 .line_layout(font_system, layout_cursor.line)
                 .expect("shape_until_cursor failed to scroll forwards");
@@ -641,6 +646,11 @@ impl Buffer {
             } else {
                 while line_i > self.scroll.line {
                     line_i -= 1;
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "line_i only decreases from an index that was \
+                                  already resolved in-bounds above"
+                    )]
                     let layout = self
                         .line_layout(font_system, line_i)
                         .expect("shape_until_cursor failed to scroll forwards");
@@ -759,6 +769,11 @@ impl Buffer {
                 }
 
                 let mut layout_height = 0.0;
+                #[expect(
+                    clippy::expect_used,
+                    reason = "line_i ranges over self.scroll.line..self.lines.len(), \
+                              so the index is in bounds"
+                )]
                 let layout = self
                     .line_layout(font_system, line_i)
                     .expect("shape_until_scroll invalid line");

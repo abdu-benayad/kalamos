@@ -445,6 +445,11 @@ impl<'a> Reader<'a> {
 
 #[cfg(test)]
 mod test {
+    #![expect(
+        clippy::expect_used,
+        reason = "test code: a failed expectation IS the test failing"
+    )]
+
     use super::*;
 
     // What these tests guard: the three variable-count records (files,

@@ -584,6 +584,11 @@ impl AttrsList {
         }
 
         for (key, resize) in removes {
+            #[expect(
+                clippy::expect_used,
+                reason = "every key in `removes` was collected from self.spans just above, \
+                          and each distinct key is looked up and removed exactly once"
+            )]
             let (range, attrs) = self
                 .spans
                 .get_key_value(&key.start)
