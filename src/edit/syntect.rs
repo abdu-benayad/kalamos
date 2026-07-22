@@ -347,9 +347,17 @@ impl<'buffer> Edit<'buffer> for SyntaxEditor<'_, 'buffer> {
                         (ParseState::new(self.syntax), ScopeStack::new())
                     };
                 let mut highlight_state = HighlightState::new(&self.highlighter, scope_stack);
-                let ops = parse_state
-                    .parse_line(line.text(), &self.syntax_system.syntax_set)
-                    .expect("failed to parse syntax");
+                let ops = match parse_state.parse_line(line.text(), &self.syntax_system.syntax_set)
+                {
+                    Ok(ops) => ops,
+                    Err(err) => {
+                        // A failed parse (pathological grammar, stack limit)
+                        // degrades this line to default styling; it runs on
+                        // every reshape, so it must not take down the editor.
+                        log::warn!("syntax parse failed on line {line_i}: {err}");
+                        Vec::new()
+                    }
+                };
                 let ranges = RangedHighlightIterator::new(
                     &mut highlight_state,
                     &ops,
