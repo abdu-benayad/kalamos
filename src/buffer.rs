@@ -1408,9 +1408,14 @@ impl Buffer {
                 new_cursor_opt = Some(new_cursor);
 
                 break;
-            } else if runs.peek().is_none() && y > run.line_y {
+            } else if runs.peek().is_none() && y >= line_top + line_height {
                 // Click below the last run: place cursor at the logical end of the
                 // line, regardless of paragraph direction or BiDi mixing.
+                // The bound is the line BOX bottom — the exact complement of
+                // the in-line arm above. Comparing against the baseline
+                // (line_y) left a dead window when ascent − descent exceeds
+                // the line height, dropping clicks between box bottom and
+                // baseline.
                 let new_cursor =
                     Cursor::new_with_affinity(run.line_i, run.text.len(), Affinity::Before);
                 new_cursor_opt = Some(new_cursor);
