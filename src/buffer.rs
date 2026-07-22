@@ -1344,12 +1344,16 @@ impl Buffer {
                 'hit: for (glyph_i, glyph) in run.glyphs.iter().enumerate() {
                     if first_glyph {
                         first_glyph = false;
-                        // "Before the line" for LTR is left of the first glyph, not
-                        // left of x=0: under Align::Right/Center a short line starts at
-                        // glyph.x > 0, and the hardcoded 0.0 sent clicks in the leading
-                        // gap to the line END via the fall-through arm. glyphs[0].x is
-                        // the true minimum x by L2-reorder construction.
-                        if (run.rtl && x > glyph.x) || (!run.rtl && x < glyph.x) {
+                        // "Before the line" is outside the visually-first glyph, not
+                        // outside x=0: an aligned short line starts at glyph.x > 0, and
+                        // the old hardcoded 0.0 sent clicks in the leading gap to the
+                        // line END via the fall-through arm. Glyph storage is
+                        // base-direction traversal, so glyphs[0] is the visually-first
+                        // glyph of the base direction: for LTR its LEFT edge (glyph.x)
+                        // is the line's minimum x, for RTL its RIGHT edge
+                        // (glyph.x + glyph.w) is the line's maximum x — the bounds are
+                        // the exact complements of the containment check below.
+                        if (run.rtl && x > glyph.x + glyph.w) || (!run.rtl && x < glyph.x) {
                             new_cursor_glyph = 0;
                             new_cursor_char = 0;
                         }
