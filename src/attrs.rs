@@ -101,8 +101,26 @@ impl FamilyOwned {
     }
 }
 
+/// f32 bits with one representation per semantic value: -0.0 folds into
+/// +0.0 and every NaN payload folds into the canonical quiet NaN, so
+/// bit-based Eq/Hash agree with f32 `==` wherever `==` can distinguish.
+fn canonical_bits(value: f32) -> u32 {
+    const CANONICAL_NAN_BITS: u32 = 0x7fc0_0000;
+
+    if value.is_nan() {
+        CANONICAL_NAN_BITS
+    } else {
+        // Adding +0.0 canonicalizes -0.0 to +0.0
+        (value + 0.0).to_bits()
+    }
+}
+
 /// Metrics, but implementing Eq and Hash using u32 representation of f32
-//TODO: what are the edge cases of this?
+///
+/// Construction canonicalizes via [`canonical_bits`], so the roundtrip back
+/// to [`Metrics`] returns +0.0 for -0.0 and the canonical NaN for any NaN —
+/// indistinguishable under f32 `==`, which is the point: values that compare
+/// equal share one cache identity.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CacheMetrics {
     font_size_bits: u32,
@@ -112,8 +130,8 @@ pub struct CacheMetrics {
 impl From<Metrics> for CacheMetrics {
     fn from(metrics: Metrics) -> Self {
         Self {
-            font_size_bits: metrics.font_size.to_bits(),
-            line_height_bits: metrics.line_height.to_bits(),
+            font_size_bits: canonical_bits(metrics.font_size),
+            line_height_bits: canonical_bits(metrics.line_height),
         }
     }
 }
@@ -218,16 +236,7 @@ impl Eq for LetterSpacing {}
 
 impl Hash for LetterSpacing {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        const CANONICAL_NAN_BITS: u32 = 0x7fc0_0000;
-
-        let bits = if self.0.is_nan() {
-            CANONICAL_NAN_BITS
-        } else {
-            // Add +0.0 to canonicalize -0.0 to +0.0
-            (self.0 + 0.0).to_bits()
-        };
-
-        bits.hash(hasher);
+        canonical_bits(self.0).hash(hasher);
     }
 }
 
@@ -604,6 +613,40 @@ impl AttrsList {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    // CacheMetrics is cache identity for Metrics, so values equal under
+    // f32 == must be one identity: -0.0 folds into +0.0 and every NaN
+    // payload folds into the canonical NaN. Raw to_bits() split them.
+
+    #[test]
+    fn negative_zero_and_positive_zero_are_one_cache_identity() {
+        assert_eq!(
+            CacheMetrics::from(Metrics::new(-0.0, 20.0)),
+            CacheMetrics::from(Metrics::new(0.0, 20.0)),
+        );
+        assert_eq!(
+            CacheMetrics::from(Metrics::new(16.0, -0.0)),
+            CacheMetrics::from(Metrics::new(16.0, 0.0)),
+        );
+    }
+
+    #[test]
+    fn all_nan_payloads_are_one_cache_identity() {
+        let other_nan = f32::from_bits(f32::NAN.to_bits() ^ 1);
+        assert!(other_nan.is_nan(), "precondition: still a NaN");
+        assert_eq!(
+            CacheMetrics::from(Metrics::new(f32::NAN, 20.0)),
+            CacheMetrics::from(Metrics::new(other_nan, 20.0)),
+        );
+    }
+
+    #[test]
+    fn ordinary_metrics_roundtrip_exactly() {
+        let metrics = Metrics::new(14.5, 19.25);
+        let roundtripped = Metrics::from(CacheMetrics::from(metrics));
+        assert_eq!(roundtripped.font_size, metrics.font_size);
+        assert_eq!(roundtripped.line_height, metrics.line_height);
+    }
 
     // FontFeatures holds one value per tag: enable-then-disable is the same
     // state as disable alone, later writes win, and insertion order is not
