@@ -780,19 +780,22 @@ impl Buffer {
         let layout = self.line_layout(font_system, cursor.line)?;
         for (layout_i, layout_line) in layout.iter().enumerate() {
             for (glyph_i, glyph) in layout_line.glyphs.iter().enumerate() {
-                let cursor_end =
-                    Cursor::new_with_affinity(cursor.line, glyph.end, Affinity::Before);
-                let cursor_start =
+                // Slots speak the Motion::LayoutCursor decoder's frame,
+                // level-blind: slot g decodes to (glyphs[g].start, After)
+                // and one past the end to (last.end, Before). The old
+                // encoding swapped the sides for RTL-level glyphs — a
+                // visual-left/right frame the decoder never spoke — so
+                // encode(decode) advanced one slot per cycle and the
+                // caret crept one cluster per vertical-motion sequence
+                // over RTL text.
+                let cursor_before =
                     Cursor::new_with_affinity(cursor.line, glyph.start, Affinity::After);
-                let (cursor_left, cursor_right) = if glyph.level.is_ltr() {
-                    (cursor_start, cursor_end)
-                } else {
-                    (cursor_end, cursor_start)
-                };
-                if cursor == cursor_left {
+                let cursor_after =
+                    Cursor::new_with_affinity(cursor.line, glyph.end, Affinity::Before);
+                if cursor == cursor_before {
                     return Some(LayoutCursor::new(cursor.line, layout_i, glyph_i));
                 }
-                if cursor == cursor_right {
+                if cursor == cursor_after {
                     return Some(LayoutCursor::new(cursor.line, layout_i, glyph_i + 1));
                 }
             }
