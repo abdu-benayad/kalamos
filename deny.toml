@@ -217,12 +217,16 @@ deny = [
 skip = [
     { name = "syn" },
 
-    # These two are from swash being on an older version of skrifa than
-    # harfrust and ourselves. (font-types converged to one version and its
-    # skip became an unnecessary-skip warning; re-add it if swash diverges
-    # again.)
+    # These are from swash and ourselves (harfrust + skrifa) resolving
+    # different generations of the Linebender vertical: skrifa → read-fonts →
+    # font-types. Accepting that duplication is one decision and all three
+    # crates are the same skip — but each entry becomes an unnecessary-skip
+    # warning whenever its crate happens to converge, so the set in force
+    # tracks the current divergence. (2026-07: swash 0.2.10 is on skrifa 0.44,
+    # kalamos on 0.40 — all three diverge.)
     { name = "read-fonts" },
     { name = "skrifa" },
+    { name = "font-types" },
     #{ crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
