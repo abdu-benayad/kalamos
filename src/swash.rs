@@ -15,6 +15,40 @@ use crate::{CacheKey, CacheKeyFlags, Color, FontSystem, HashMap};
 pub use swash::scale::image::{Content as SwashContent, Image as SwashImage};
 pub use swash::zeno::{Angle, Command, Placement, Transform};
 
+/// Clamp a requested axis value to an axis's advertised bounds, totally:
+/// bounds come straight from the font file's `fvar` table and are
+/// untrusted, and `f32::clamp` panics when `min > max`. A malformed axis
+/// (inverted or non-finite bounds) cannot be honored and yields `None`.
+fn clamp_to_axis(value: f32, min: f32, max: f32) -> Option<f32> {
+    if min > max || min.is_nan() || max.is_nan() {
+        return None;
+    }
+    Some(value.clamp(min, max))
+}
+
+/// The `wght` coordinate to request for this cache key, if the font has a
+/// well-formed `wght` axis. Both scaler builders below share this; the
+/// panic this replaces had been pasted into each of them separately.
+fn wght_coordinate(font: &swash::FontRef<'_>, cache_key: &CacheKey) -> Option<f32> {
+    let variation = font
+        .variations()
+        .find_by_tag(swash::Tag::from_be_bytes(*b"wght"))?;
+    let coordinate = clamp_to_axis(
+        f32::from(cache_key.font_weight.0),
+        variation.min_value(),
+        variation.max_value(),
+    );
+    if coordinate.is_none() {
+        log::warn!(
+            "font {:?} advertises malformed wght axis bounds [{}, {}]; ignoring the axis",
+            cache_key.font_id,
+            variation.min_value(),
+            variation.max_value()
+        );
+    }
+    coordinate
+}
+
 fn swash_image(
     font_system: &mut FontSystem,
     context: &mut ScaleContext,
@@ -25,21 +59,17 @@ fn swash_image(
         return None;
     };
 
-    let variable_width = font
-        .as_swash()
-        .variations()
-        .find_by_tag(swash::Tag::from_be_bytes(*b"wght"));
-
     // Build the scaler
     let mut scaler = context
         .builder(font.as_swash())
         .size(f32::from_bits(cache_key.font_size_bits))
         .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if let Some(variation) = variable_width {
-        scaler = scaler.normalized_coords(font.as_swash().variations().normalized_coords([(
-            swash::Tag::from_be_bytes(*b"wght"),
-            f32::from(cache_key.font_weight.0).clamp(variation.min_value(), variation.max_value()),
-        )]));
+    if let Some(coordinate) = wght_coordinate(&font.as_swash(), &cache_key) {
+        scaler = scaler.normalized_coords(
+            font.as_swash()
+                .variations()
+                .normalized_coords([(swash::Tag::from_be_bytes(*b"wght"), coordinate)]),
+        );
     }
     let mut scaler = scaler.build();
 
@@ -91,21 +121,17 @@ fn swash_outline_commands(
         return None;
     };
 
-    let variable_width = font
-        .as_swash()
-        .variations()
-        .find_by_tag(swash::Tag::from_be_bytes(*b"wght"));
-
     // Build the scaler
     let mut scaler = context
         .builder(font.as_swash())
         .size(f32::from_bits(cache_key.font_size_bits))
         .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if let Some(variation) = variable_width {
-        scaler = scaler.normalized_coords(font.as_swash().variations().normalized_coords([(
-            swash::Tag::from_be_bytes(*b"wght"),
-            f32::from(cache_key.font_weight.0).clamp(variation.min_value(), variation.max_value()),
-        )]));
+    if let Some(coordinate) = wght_coordinate(&font.as_swash(), &cache_key) {
+        scaler = scaler.normalized_coords(
+            font.as_swash()
+                .variations()
+                .normalized_coords([(swash::Tag::from_be_bytes(*b"wght"), coordinate)]),
+        );
     }
     let mut scaler = scaler.build();
 
@@ -304,5 +330,32 @@ mod test {
             normalized, reference,
             "normalized_coords match clean render"
         );
+    }
+
+    // clamp_to_axis is the total replacement for the raw f32::clamp on
+    // fvar bounds that panicked on min > max. The bounds come from the
+    // font file; a malformed axis must be ignored, not a process abort.
+    // (An integration pin would need a crafted font whose fvar declares
+    // inverted bounds; the totality of the helper is what is pinned.)
+    #[test]
+    fn clamp_to_axis_honors_well_formed_bounds() {
+        assert_eq!(clamp_to_axis(700.0, 100.0, 900.0), Some(700.0));
+        assert_eq!(clamp_to_axis(50.0, 100.0, 900.0), Some(100.0));
+        assert_eq!(clamp_to_axis(1000.0, 100.0, 900.0), Some(900.0));
+        // A degenerate but ordered axis is still honored.
+        assert_eq!(clamp_to_axis(400.0, 500.0, 500.0), Some(500.0));
+    }
+
+    #[test]
+    fn clamp_to_axis_rejects_inverted_bounds() {
+        // The pair that used to reach f32::clamp and panic.
+        assert_eq!(clamp_to_axis(400.0, 900.0, 100.0), None);
+    }
+
+    #[test]
+    fn clamp_to_axis_rejects_nan_bounds() {
+        assert_eq!(clamp_to_axis(400.0, f32::NAN, 900.0), None);
+        assert_eq!(clamp_to_axis(400.0, 100.0, f32::NAN), None);
+        assert_eq!(clamp_to_axis(400.0, f32::NAN, f32::NAN), None);
     }
 }
