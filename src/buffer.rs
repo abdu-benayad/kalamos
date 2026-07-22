@@ -741,6 +741,13 @@ impl Buffer {
     }
 
     /// Convert a [`Cursor`] to a [`LayoutCursor`]
+    ///
+    /// Resolution is total for any cursor on an existing line: cursors
+    /// that name a glyph edge resolve exactly; the end-of-line cursor
+    /// with [`Affinity::After`], the line-start cursor with
+    /// [`Affinity::Before`], cluster-interior indices, and indices no
+    /// glyph covers all snap to the nearest laid-out boundary. Returns
+    /// `None` only when `cursor.line` is out of bounds.
     pub fn layout_cursor(
         &mut self,
         font_system: &mut FontSystem,
@@ -767,9 +774,42 @@ impl Buffer {
             }
         }
 
-        // Fall back to start of line
-        //TODO: should this be the end of the line?
-        Some(LayoutCursor::new(cursor.line, 0, 0))
+        // The pass above recognizes the two exact cursors that name each
+        // glyph edge: (start, After) and (end, Before). Legitimate cursors
+        // fall outside that set — (len, After) at the end of the line from
+        // Previous/PreviousWord/ParagraphEnd, (0, Before) at its start, an
+        // index inside a shaped cluster, or a stale index after external
+        // `lines` mutation — and used to teleport to the line start.
+        //
+        // Resolve them to the slot whose decoded byte position is nearest.
+        // The decoder is Motion::LayoutCursor: slot g on a row means
+        // (glyphs[g].start, After), and a row's one-past-the-end slot
+        // means (last_glyph.end, Before). Matching decoded byte positions
+        // rather than visual geometry keeps this correct for any
+        // direction mix a row can hold. Ties go to the earlier slot, so a
+        // cluster interior snaps to its cluster's logical start.
+        let nearest = layout
+            .iter()
+            .enumerate()
+            .flat_map(|(layout_i, layout_line)| {
+                let starts = layout_line
+                    .glyphs
+                    .iter()
+                    .enumerate()
+                    .map(move |(glyph_i, glyph)| (layout_i, glyph_i, glyph.start));
+                let row_end = layout_line
+                    .glyphs
+                    .last()
+                    .map(move |glyph| (layout_i, layout_line.glyphs.len(), glyph.end));
+                starts.chain(row_end)
+            })
+            .min_by_key(|(_, _, byte)| byte.abs_diff(cursor.index));
+
+        Some(match nearest {
+            Some((layout_i, slot, _)) => LayoutCursor::new(cursor.line, layout_i, slot),
+            // No glyphs at all (an empty line): the start is the only slot.
+            None => LayoutCursor::new(cursor.line, 0, 0),
+        })
     }
 
     /// Shape the provided line index and return the result
