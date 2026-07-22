@@ -340,7 +340,19 @@ fn shape_run(
         attrs.weight,
     );
 
-    let font = font_iter.next().expect("no default font found");
+    let Some(font) = font_iter.next() else {
+        // An empty or misconfigured font database is an environmental
+        // condition, not an invariant. The run shapes to zero glyphs —
+        // nothing renders, the warning says why — and the process gets
+        // to report its own misconfiguration instead of aborting on the
+        // first shaped line.
+        log::warn!(
+            "no font available to shape {} bytes of text; is the font database empty?",
+            end_run.saturating_sub(start_run)
+        );
+        font_system.shape_buffer.scripts = scripts;
+        return;
+    };
 
     let glyph_start = glyphs.len();
     let mut missing = {
@@ -523,7 +535,15 @@ fn shape_skip(
         attrs.weight,
     );
 
-    let font = font_iter.next().expect("no default font found");
+    let Some(font) = font_iter.next() else {
+        // Same degradation as shape_run: a fontless database yields an
+        // empty run, not a panic.
+        log::warn!(
+            "no font available to shape {} bytes of text; is the font database empty?",
+            end_run.saturating_sub(start_run)
+        );
+        return;
+    };
     let glyph_start = glyphs.len();
 
     shape_skip_glyphs(glyphs, &font, line, attrs_list, start_run, end_run);
