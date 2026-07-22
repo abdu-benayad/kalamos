@@ -535,8 +535,12 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                 self.selection = Selection::None;
             }
             Action::Insert(character) => {
-                if character.is_control() && !['\t', '\n', '\u{92}'].contains(&character) {
-                    // Filter out special chars (except for tab), use Action instead
+                if character.is_control() && !['\t', '\n'].contains(&character) {
+                    // Filter out control chars (except tab and newline); the
+                    // dedicated Actions cover cursor motion and deletion. The
+                    // inherited list also exempted U+0092 (C1 Private Use Two)
+                    // — a cp1252 typo for U+2019, which is not a control and
+                    // needs no exemption.
                     log::debug!("Refusing to insert control character {character:?}");
                 } else if character == '\n' {
                     self.action(font_system, Action::Enter);
