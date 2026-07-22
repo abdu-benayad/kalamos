@@ -580,7 +580,12 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                     let end = self.cursor;
 
                     if self.cursor.index > 0 {
-                        // Move cursor to previous character index
+                        // Move cursor back one scalar, not one grapheme:
+                        // scalar-wise backward deletion is the Arabic-input
+                        // convention — the last harakah can be corrected
+                        // without deleting its base letter. Forward Delete
+                        // removes a whole grapheme; the asymmetry is
+                        // deliberate.
                         self.cursor.index = self.with_buffer(|buffer| {
                             buffer.lines[self.cursor.line].text()[..self.cursor.index]
                                 .char_indices()
@@ -597,6 +602,28 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                     if self.cursor != end {
                         // Delete range
                         self.delete_range(self.cursor, end);
+
+                        // Removing one scalar can fuse the surrounding text
+                        // into a new cluster (two flag emoji losing a
+                        // regional indicator), leaving the caret
+                        // mid-grapheme at a position no motion can reach.
+                        // Snap to the largest grapheme boundary at or
+                        // before it; a caret already on a boundary is
+                        // untouched.
+                        let line_i = self.cursor.line;
+                        let index = self.cursor.index;
+                        self.cursor.index = self.with_buffer(|buffer| {
+                            let text = buffer.lines[line_i].text();
+                            if index >= text.len() {
+                                text.len()
+                            } else {
+                                text.grapheme_indices(true)
+                                    .map(|(i, _)| i)
+                                    .take_while(|&i| i <= index)
+                                    .last()
+                                    .unwrap_or(0)
+                            }
+                        });
                     }
                 }
             }
