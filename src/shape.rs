@@ -1345,6 +1345,51 @@ impl Default for VlRange {
     }
 }
 
+impl VlRange {
+    /// The glyphs this range covers, word by word: every word the range
+    /// touches, paired with the sub-slice of its glyphs inside the range —
+    /// whole words in the interior, clipped at the two endpoint words.
+    ///
+    /// Total: a range whose words run past `words`, or whose glyph endpoint
+    /// is out of bounds or inverted within its boundary word, degrades to
+    /// empty coverage there and logs a warning instead of panicking. The
+    /// producer (`layout_spans`) once emitted exactly such a range — the
+    /// 2026-07 inverted-range panic fired in a consumer of this shape — so
+    /// the degrade keeps future producer bugs visible without taking down
+    /// the render path.
+    fn word_glyphs(self, words: &[ShapeWord]) -> impl Iterator<Item = (&ShapeWord, &[ShapeGlyph])> {
+        let end_word = self.end.word + usize::from(self.end.glyph != 0);
+        if end_word > words.len() {
+            log::warn!(
+                "malformed {self:?}: covers words up to {end_word} but the span has {} words",
+                words.len()
+            );
+        }
+        words
+            .iter()
+            .enumerate()
+            .take(end_word)
+            .skip(self.start.word)
+            .map(move |(i, word)| {
+                let covered = match (i == self.start.word, i == self.end.word) {
+                    (false, false) => word.glyphs.get(..),
+                    (true, false) => word.glyphs.get(self.start.glyph..),
+                    (false, true) => word.glyphs.get(..self.end.glyph),
+                    (true, true) => word.glyphs.get(self.start.glyph..self.end.glyph),
+                };
+                let covered = covered.unwrap_or_else(|| {
+                    log::warn!(
+                        "malformed {self:?}: glyph endpoint out of bounds for word {i} \
+                         ({} glyphs); degrading to empty coverage",
+                        word.glyphs.len()
+                    );
+                    &[]
+                });
+                (word, covered)
+            })
+    }
+}
+
 #[derive(Default, Debug)]
 struct VisualLine {
     ranges: Vec<VlRange>,
@@ -2269,26 +2314,13 @@ impl ShapeLine {
     fn byte_range_of_vlrange(&self, r: &VlRange) -> Option<(usize, usize)> {
         debug_assert_ne!(r.span, ELLIPSIS_SPAN);
         let words = self.get_span_words(r.span);
-        let mut min_byte = usize::MAX;
-        let mut max_byte = 0usize;
-        let end_word = r.end.word + usize::from(r.end.glyph != 0);
-        for (i, word) in words.iter().enumerate().take(end_word).skip(r.start.word) {
-            let included_glyphs = match (i == r.start.word, i == r.end.word) {
-                (false, false) => &word.glyphs[..],
-                (true, false) => &word.glyphs[r.start.glyph..],
-                (false, true) => &word.glyphs[..r.end.glyph],
-                (true, true) => &word.glyphs[r.start.glyph..r.end.glyph],
-            };
-            for glyph in included_glyphs {
-                min_byte = min_byte.min(glyph.start);
-                max_byte = max_byte.max(glyph.end);
-            }
-        }
-        if min_byte <= max_byte {
-            Some((min_byte, max_byte))
-        } else {
-            None
-        }
+        let (min_byte, max_byte) = r
+            .word_glyphs(words)
+            .flat_map(|(_, glyphs)| glyphs)
+            .fold((usize::MAX, 0usize), |(min_byte, max_byte), glyph| {
+                (min_byte.min(glyph.start), max_byte.max(glyph.end))
+            });
+        (min_byte <= max_byte).then_some((min_byte, max_byte))
     }
 
     fn compute_elided_byte_range(
@@ -3041,22 +3073,7 @@ impl ShapeLine {
                     // Cursor into deco_spans — advances forward as glyphs are
                     // emitted in byte order, giving amortized O(1) lookup.
                     let mut deco_cursor: usize = 0;
-                    // If ending_glyph is not 0 we need to include glyphs from the ending_word
-                    #[expect(
-                        clippy::needless_range_loop,
-                        reason = "the index is compared against r.start.word and r.end.word to \
-                                  decide which end of the word is clipped, so it carries meaning \
-                                  beyond indexing span_words"
-                    )]
-                    for i in r.start.word..r.end.word + usize::from(r.end.glyph != 0) {
-                        let word = &span_words[i];
-                        let included_glyphs = match (i == r.start.word, i == r.end.word) {
-                            (false, false) => &word.glyphs[..],
-                            (true, false) => &word.glyphs[r.start.glyph..],
-                            (false, true) => &word.glyphs[..r.end.glyph],
-                            (true, true) => &word.glyphs[r.start.glyph..r.end.glyph],
-                        };
-
+                    for (word, included_glyphs) in r.word_glyphs(span_words) {
                         for glyph in included_glyphs {
                             // Use overridden font size
                             let font_size = glyph.metrics_opt.map_or(font_size, |x| x.font_size);
@@ -3243,5 +3260,106 @@ impl ShapeLine {
         scratch.visual_lines.append(&mut cached_visual_lines);
         scratch.cached_visual_lines = cached_visual_lines;
         scratch.glyph_sets = cached_glyph_sets;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ShapeGlyph, ShapeWord, VlRange, WordGlyphPos};
+    use crate::CacheKeyFlags;
+
+    fn glyph(start: usize, end: usize) -> ShapeGlyph {
+        ShapeGlyph {
+            start,
+            end,
+            x_advance: 1.0,
+            y_advance: 0.0,
+            x_offset: 0.0,
+            y_offset: 0.0,
+            ascent: 1.0,
+            descent: 0.0,
+            font_monospace_em_width: None,
+            font_id: fontdb::ID::dummy(),
+            font_weight: fontdb::Weight::NORMAL,
+            glyph_id: 0,
+            color_opt: None,
+            metadata: 0,
+            cache_key_flags: CacheKeyFlags::empty(),
+            metrics_opt: None,
+        }
+    }
+
+    fn word(byte_ranges: &[(usize, usize)]) -> ShapeWord {
+        ShapeWord {
+            blank: false,
+            glyphs: byte_ranges.iter().map(|&(s, e)| glyph(s, e)).collect(),
+        }
+    }
+
+    fn range(start: (usize, usize), end: (usize, usize)) -> VlRange {
+        VlRange {
+            span: 0,
+            start: WordGlyphPos::new(start.0, start.1),
+            end: WordGlyphPos::new(end.0, end.1),
+            level: unicode_bidi::Level::ltr(),
+        }
+    }
+
+    /// Byte spans of the covered glyphs, word by word — the observable the
+    /// pins below compare against.
+    fn coverage(r: VlRange, words: &[ShapeWord]) -> Vec<Vec<(usize, usize)>> {
+        r.word_glyphs(words)
+            .map(|(_, glyphs)| glyphs.iter().map(|g| (g.start, g.end)).collect())
+            .collect()
+    }
+
+    #[test]
+    fn boundary_words_are_clipped_and_interior_words_are_whole() {
+        let words = [
+            word(&[(0, 1), (1, 2), (2, 3)]),
+            word(&[(3, 4), (4, 5)]),
+            word(&[(5, 6), (6, 7), (7, 8), (8, 9)]),
+        ];
+        assert_eq!(
+            coverage(range((0, 1), (2, 2)), &words),
+            [
+                vec![(1, 2), (2, 3)], // suffix of the start word
+                vec![(3, 4), (4, 5)], // whole interior word
+                vec![(5, 6), (6, 7)], // prefix of the end word
+            ]
+        );
+    }
+
+    #[test]
+    fn an_end_glyph_of_zero_excludes_the_end_word_entirely() {
+        let words = [word(&[(0, 1)]), word(&[(1, 2)]), word(&[(2, 3)])];
+        assert_eq!(
+            coverage(range((0, 0), (2, 0)), &words),
+            [vec![(0, 1)], vec![(1, 2)]]
+        );
+    }
+
+    /// The 2026-07 `layout_spans` bug emitted a range inverted within its
+    /// boundary word, and the consumer panicked with "slice index starts at
+    /// 9 but ends at 8". The shared consumer must degrade instead.
+    #[test]
+    fn an_inverted_boundary_range_degrades_to_empty_coverage() {
+        let words = [word(&[(0, 1), (1, 2), (2, 3)])];
+        assert_eq!(coverage(range((0, 9), (0, 8)), &words), [Vec::new()]);
+    }
+
+    #[test]
+    fn a_glyph_endpoint_past_the_word_degrades_that_word_only() {
+        let words = [word(&[(0, 1), (1, 2)]), word(&[(2, 3)])];
+        assert_eq!(
+            coverage(range((0, 5), (2, 0)), &words),
+            [vec![], vec![(2, 3)]]
+        );
+    }
+
+    #[test]
+    fn a_word_endpoint_past_the_span_truncates_instead_of_panicking() {
+        let words = [word(&[(0, 1)])];
+        assert_eq!(coverage(range((0, 0), (5, 1)), &words), [vec![(0, 1)]]);
     }
 }
