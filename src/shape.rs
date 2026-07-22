@@ -1725,7 +1725,10 @@ impl ShapeLine {
             }
             (glyph_end, glyphs_w)
         } else {
-            let mut glyph_end = word.glyphs.len();
+            // end_glyph_pos, not word.glyphs.len(): for the incongruent resume
+            // word the fit range is 0..start.glyph, and a no-fit result must
+            // land ON that bound — glyphs.len() would commit an inverted range.
+            let mut glyph_end = end_glyph_pos;
             for glyph_idx in (start_glyph_pos..end_glyph_pos).rev() {
                 let g_w = word.glyphs[glyph_idx].width(font_size);
                 if currently_used_width + glyphs_w + g_w > total_available_width {
@@ -1771,21 +1774,56 @@ impl ShapeLine {
         starting_word_index: usize,
         direction: LayoutDirection,
         congruent: bool,
+        start: SpanWordGlyphPos,
         start_span: usize,
         span_count: usize,
         threshold: f32,
     ) -> bool {
         let mut acc: f32 = 0.0;
 
+        // An incongruent resume span only owns words 0..start.word plus, when
+        // start.glyph > 0, glyphs 0..start.glyph of word start.word — words
+        // past that boundary were committed to the PREVIOUS line and must not
+        // be counted as remaining. (The fresh-line sentinel span is usize::MAX,
+        // so resume_span is uniformly false on a fresh line.)
+        let resume_span = span_index == start.span;
+
         // Remaining words in the current span
         let word_range: Range<usize> = match (direction, congruent) {
             (LayoutDirection::Forward, true) => word_idx + 1..word_count,
             (LayoutDirection::Forward, false) => 0..word_idx,
             (LayoutDirection::Backward, true) => starting_word_index..word_idx,
-            (LayoutDirection::Backward, false) => word_idx + 1..word_count,
+            (LayoutDirection::Backward, false) => {
+                let cap = if resume_span {
+                    start.word + usize::from(start.glyph > 0)
+                } else {
+                    word_count
+                };
+                word_idx + 1..cap
+            }
         };
         for wi in word_range {
-            acc += spans[span_index].words[wi].width(font_size);
+            let word = &spans[span_index].words[wi];
+            // The boundary word contributes only its resumed share: the glyph
+            // prefix 0..start.glyph for an incongruent span, the suffix
+            // start.glyph.. for a congruent one — the other side was committed
+            // to the previous line.
+            let word_width = if resume_span && wi == start.word && start.glyph > 0 {
+                let owned = if congruent {
+                    start.glyph..word.glyphs.len()
+                } else {
+                    0..start.glyph
+                };
+                word.glyphs
+                    .get(owned)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|glyph| glyph.width(font_size))
+                    .sum()
+            } else {
+                word.width(font_size)
+            };
+            acc += word_width;
             if acc > threshold {
                 return true;
             }
@@ -1875,7 +1913,16 @@ impl ShapeLine {
                 (LayoutDirection::Forward, true, _) => (starting_word_index..word_count).collect(),
                 (LayoutDirection::Forward, false, Some(start)) => {
                     if span_index == start.span {
-                        (0..start.word).rev().collect()
+                        // A resume glyph > 0 means glyphs 0..start.glyph of
+                        // word start.word belong to THIS line: the word must be
+                        // iterated (its partial width measured), or the range
+                        // committed below covers glyphs whose width never
+                        // entered total_w and the line overflows unellipsized.
+                        if start.glyph > 0 {
+                            (0..=start.word).rev().collect()
+                        } else {
+                            (0..start.word).rev().collect()
+                        }
                     } else {
                         (0..word_count).rev().collect()
                     }
@@ -1927,6 +1974,7 @@ impl ShapeLine {
                                     starting_word_index,
                                     direction,
                                     congruent,
+                                    start,
                                     // The traversal floor, not `start` itself: on a
                                     // fresh line `start` is the unaliasable sentinel,
                                     // while the Backward remaining-spans range needs
