@@ -10,6 +10,11 @@ pub struct ShapeRunKey {
     pub text: String,
     pub default_attrs: AttrsOwned,
     pub attrs_spans: Vec<(Range<usize>, AttrsOwned)>,
+    /// Whether the run was shaped right-to-left. Direction is part of the
+    /// shaped output — mirroring of paired brackets, joining forms, glyph
+    /// order — so the same text and attrs shaped LTR and RTL are distinct
+    /// entries, not one.
+    pub span_rtl: bool,
 }
 
 /// A helper structure for caching shape runs.
