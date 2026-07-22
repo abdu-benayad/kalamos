@@ -27,6 +27,27 @@ pub struct Editor<'buffer> {
     change: Option<Change>,
 }
 
+/// The selected slice of `text`, total against stale cursors.
+///
+/// Editor cursors are unvalidated — `set_cursor` accepts any [`Cursor`] and
+/// `with_buffer_mut` can rewrite the text under a live selection — so a
+/// segment range can fall past the end of its line or off a char boundary.
+/// Such a segment degrades to the empty string with a warning; the segments
+/// a valid cursor still reaches are unaffected.
+fn selected_segment<R>(text: &str, range: R) -> &str
+where
+    R: core::slice::SliceIndex<str, Output = str> + core::fmt::Debug + Clone,
+{
+    text.get(range.clone()).unwrap_or_else(|| {
+        log::warn!(
+            "selection segment {range:?} is unreachable in a {}-byte line \
+             (stale cursor); treating it as empty",
+            text.len()
+        );
+        ""
+    })
+}
+
 fn cursor_position(cursor: &Cursor, run: &LayoutRun) -> Option<(i32, i32)> {
     let x = run.cursor_position(cursor)?;
     Some((x as i32, run.line_top as i32))
@@ -440,9 +461,15 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
             {
                 // Add selected part of line to string
                 if start.line == end.line {
-                    selection.push_str(&buffer.lines[start.line].text()[start.index..end.index]);
+                    selection.push_str(selected_segment(
+                        buffer.lines[start.line].text(),
+                        start.index..end.index,
+                    ));
                 } else {
-                    selection.push_str(&buffer.lines[start.line].text()[start.index..]);
+                    selection.push_str(selected_segment(
+                        buffer.lines[start.line].text(),
+                        start.index..,
+                    ));
                     selection.push('\n');
                 }
             }
@@ -456,7 +483,7 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
             // Take the selection from the last line
             if end.line > start.line {
                 // Add selected part of line to string
-                selection.push_str(&buffer.lines[end.line].text()[..end.index]);
+                selection.push_str(selected_segment(buffer.lines[end.line].text(), ..end.index));
             }
 
             Some(selection)
@@ -590,11 +617,27 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                         // without deleting its base letter. Forward Delete
                         // removes a whole grapheme; the asymmetry is
                         // deliberate.
+                        let index = self.cursor.index;
                         self.cursor.index = self.with_buffer(|buffer| {
-                            buffer.lines[self.cursor.line].text()[..self.cursor.index]
-                                .char_indices()
-                                .next_back()
-                                .map_or(0, |(i, _)| i)
+                            let text = buffer.lines[self.cursor.line].text();
+                            match text.get(..index) {
+                                Some(before_cursor) => before_cursor
+                                    .char_indices()
+                                    .next_back()
+                                    .map_or(0, |(i, _)| i),
+                                // Stale cursor (byte index past the line or
+                                // mid-char): leave it where it is, so the
+                                // cursor == end check below makes Backspace
+                                // a no-op instead of a panic.
+                                None => {
+                                    log::warn!(
+                                        "Backspace with a stale cursor (byte {index} of a \
+                                         {}-byte line); ignoring",
+                                        text.len()
+                                    );
+                                    index
+                                }
+                            }
                         });
                     } else if self.cursor.line > 0 {
                         // Move cursor to previous line
@@ -677,15 +720,24 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                 let tab_width: usize = self.tab_width().into();
                 for line_i in start.line..=end.line {
                     // Determine indexes of last indent and first character after whitespace
-                    let mut after_whitespace = 0;
-                    let mut required_indent = 0;
-                    self.with_buffer(|buffer| {
-                        let line = &buffer.lines[line_i];
-                        let text = line.text();
+                    let indent_plan = self.with_buffer(|buffer| {
+                        let text = buffer.lines[line_i].text();
 
                         if self.selection == Selection::None {
                             //Selection::None counts whitespace from the cursor backwards
-                            let whitespace_length = match line.text()[0..self.cursor.index]
+                            let Some(before_cursor) = text.get(0..self.cursor.index) else {
+                                // Stale cursor (byte index past the line or
+                                // mid-char): leave this line unindented
+                                // instead of panicking.
+                                log::warn!(
+                                    "Indent with a stale cursor (byte {} of a {}-byte line); \
+                                     leaving line {line_i} unchanged",
+                                    self.cursor.index,
+                                    text.len()
+                                );
+                                return None;
+                            };
+                            let whitespace_length = match before_cursor
                                 .chars()
                                 .rev()
                                 .position(|c| !c.is_whitespace())
@@ -694,10 +746,14 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                                 // The whole line is whitespace
                                 None => self.cursor.index,
                             };
-                            required_indent = tab_width - (whitespace_length % tab_width);
-                            after_whitespace = self.cursor.index;
+                            Some((
+                                self.cursor.index,
+                                tab_width - (whitespace_length % tab_width),
+                            ))
                         } else {
                             // Other selections count whitespace from  the start of the line
+                            let mut after_whitespace = 0;
+                            let mut required_indent = 0;
                             for (count, (index, c)) in text.char_indices().enumerate() {
                                 if !c.is_whitespace() {
                                     after_whitespace = index;
@@ -705,8 +761,12 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                                     break;
                                 }
                             }
+                            Some((after_whitespace, required_indent))
                         }
                     });
+                    let Some((after_whitespace, required_indent)) = indent_plan else {
+                        continue;
+                    };
 
                     self.insert_at(
                         Cursor::new(line_i, after_whitespace),

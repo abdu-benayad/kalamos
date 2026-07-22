@@ -557,8 +557,15 @@ fn shape_skip(
 
     // If any glyphs are missing and the user has specified a font,
     // fall back to a default font (SansSerif or Monospace)
+    // glyph_start was glyphs.len() before shape_skip_glyphs, which only
+    // appends, so the suffix always exists; .get over indexing here avoids
+    // an #[expect] that would blanket this whole block's other slicing.
     if matches!(attrs.family, Family::Name(_))
-        && glyphs[glyph_start..].iter().any(|g| g.glyph_id == 0)
+        && glyphs
+            .get(glyph_start..)
+            .unwrap_or_default()
+            .iter()
+            .any(|g| g.glyph_id == 0)
     {
         let is_mono = font_system
             .db()
@@ -585,7 +592,7 @@ fn shape_skip(
             let fb_glyph_metrics = fb_swash.glyph_metrics(&[]).scale(1.0);
             let fb_scale = f32::from(fb_metrics.units_per_em);
 
-            for glyph in glyphs[glyph_start..].iter_mut() {
+            for glyph in glyphs.get_mut(glyph_start..).unwrap_or_default() {
                 if glyph.glyph_id != 0 {
                     continue;
                 }
@@ -1630,6 +1637,11 @@ impl ShapeLine {
                 }
             }
             if let (Some(from), Some(to)) = (reset_from, reset_to) {
+                #[expect(
+                    clippy::indexing_slicing,
+                    reason = "from and to are char_indices byte positions in para.info.text, \
+                              and unicode-bidi resolves one level per byte of that text"
+                )]
                 for level in &mut line_levels[from..to] {
                     *level = para.para.level;
                 }
@@ -1638,6 +1650,11 @@ impl ShapeLine {
             }
         }
         if let Some(from) = reset_from {
+            #[expect(
+                clippy::indexing_slicing,
+                reason = "from is a char_indices byte position in para.info.text, \
+                          and unicode-bidi resolves one level per byte of that text"
+            )]
             for level in &mut line_levels[from..] {
                 *level = para.para.level;
             }
@@ -1660,7 +1677,7 @@ impl ShapeLine {
 
         let mut min_level = line[0];
         let mut max_level = line[0];
-        for &level in &line[1..] {
+        for &level in line.iter().skip(1) {
             min_level = min(min_level, level);
             max_level = max(max_level, level);
         }
@@ -1697,6 +1714,12 @@ impl ShapeLine {
                 }
 
                 // Reverse the individual elements within this sequence.
+                #[expect(
+                    clippy::indexing_slicing,
+                    reason = "seq_start < count from the outer loop guard, \
+                              seq_start < seq_end <= count from the inner one, \
+                              and elements has exactly count entries"
+                )]
                 elements[seq_start..seq_end].reverse();
 
                 seq_start = seq_end;

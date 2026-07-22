@@ -63,8 +63,9 @@
 #![allow(clippy::arithmetic_side_effects)]
 // Out-of-bounds indexing is a hidden panic path. The crate-wide gate is deny;
 // the six modules still carrying inherited index sites are `allow`ed at their
-// `mod` items below (130 sites total, measured 2026-07 via --force-warn with
-// --all-targets: in-crate #[cfg(test)] modules count, tests/ does not), so
+// `mod` items below (123 sites total, measured 2026-07 via --force-warn with
+// --all-targets: in-crate #[cfg(test)] modules count, tests/ does not, and
+// sites carrying their own per-site #[expect] proof are not debt), so
 // every clean module — and every new one — is born protected. A blind
 // `x[i]` → `.get(i)` sweep would trade silently-correct hot-path code for
 // noisy panic paths or bogus Options; sites get replaced per-module when
@@ -170,7 +171,7 @@ mod render;
 pub use self::shape::*;
 #[allow(
     clippy::indexing_slicing,
-    reason = "inherited index debt: 53 sites (2026-07)"
+    reason = "inherited index debt: 46 sites (2026-07); 3 more carry per-site #[expect] proofs"
 )]
 mod shape;
 
