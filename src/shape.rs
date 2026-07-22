@@ -330,11 +330,10 @@ fn shape_run(
 
     let fonts = font_system.get_font_matches(&attrs);
 
-    let default_families = [&attrs.family];
     let mut font_iter = FontFallbackIter::new(
         font_system,
         &fonts,
-        &default_families,
+        &attrs.family,
         &scripts,
         &line[start_run..end_run],
         attrs.weight,
@@ -525,15 +524,8 @@ fn shape_skip(
     let attrs = attrs_list.get_span(start_run);
     let fonts = font_system.get_font_matches(&attrs);
 
-    let default_families = [&attrs.family];
-    let mut font_iter = FontFallbackIter::new(
-        font_system,
-        &fonts,
-        &default_families,
-        &[],
-        "",
-        attrs.weight,
-    );
+    let mut font_iter =
+        FontFallbackIter::new(font_system, &fonts, &attrs.family, &[], "", attrs.weight);
 
     let Some(font) = font_iter.next() else {
         // Same degradation as shape_run: a fontless database yields an
@@ -568,9 +560,8 @@ fn shape_skip(
             .style(attrs.style)
             .stretch(attrs.stretch);
         let fb_fonts = font_system.get_font_matches(&fb_attrs);
-        let fb_families = [&fb_family];
         let mut fb_iter =
-            FontFallbackIter::new(font_system, &fb_fonts, &fb_families, &[], "", attrs.weight);
+            FontFallbackIter::new(font_system, &fb_fonts, &fb_family, &[], "", attrs.weight);
 
         if let Some(fb_font) = fb_iter.next() {
             let fb_swash = fb_font.as_swash();
@@ -1051,12 +1042,10 @@ impl ShapeSpan {
                         let probe_text = format!("{}{}", c1, c2);
                         let attrs = attrs_list.get_span(start_idx + end_lb);
                         let fonts = font_system.get_font_matches(&attrs);
-                        let default_families = [&attrs.family];
-
                         let mut font_iter = FontFallbackIter::new(
                             font_system,
                             &fonts,
-                            &default_families,
+                            &attrs.family,
                             &[],
                             &probe_text,
                             attrs.weight,
