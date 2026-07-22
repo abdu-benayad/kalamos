@@ -1482,8 +1482,16 @@ impl ShapeLine {
                     if line.get(glyph.start..glyph.end) == Some("\t") {
                         // Tabs are shaped as spaces, so they will always have the x_advance of a space.
                         let tab_x_advance = f32::from(tab_width) * glyph.x_advance;
-                        let tab_stop = (math::floorf(x / tab_x_advance) + 1.0) * tab_x_advance;
-                        glyph.x_advance = tab_stop - x;
+                        // The advance already includes letter_spacing, so a
+                        // spacing that cancels the space collapses the grid
+                        // to zero (or below): the division here would mint
+                        // NaN/inf, poison the running x of every later
+                        // glyph, and silently stop wrapping. A degenerate
+                        // grid keeps the shaped advance instead.
+                        if tab_x_advance > 0.0 && tab_x_advance.is_finite() {
+                            let tab_stop = (math::floorf(x / tab_x_advance) + 1.0) * tab_x_advance;
+                            glyph.x_advance = tab_stop - x;
+                        }
                     }
                     x += glyph.x_advance;
                 }
