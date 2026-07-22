@@ -750,8 +750,12 @@ impl Buffer {
                 }
             }
 
-            if total_height < scroll_end && self.scroll.line > 0 {
-                // Need to scroll up to stay inside of buffer
+            // Scroll up to keep a bounded window full when it reaches
+            // past the end of the content. Only a bounded window: with
+            // no height, scroll_end is infinite, this branch would fire
+            // for any nonzero scroll, and the -infinity walk-back
+            // silently reverted every set_scroll to line 0.
+            if self.height_opt.is_some() && total_height < scroll_end && self.scroll.line > 0 {
                 self.scroll.vertical -= scroll_end - total_height;
             } else {
                 // Done adjusting scroll
