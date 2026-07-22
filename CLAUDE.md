@@ -73,10 +73,12 @@ cargo test --all-features       # tests alone
 cargo doc --all-features --no-deps
 ```
 
-`ci.sh` builds and lints every feature combination, then runs one
+`ci.sh` builds and lints every feature combination — including a
+`std,wasm-web` lane on `wasm32-unknown-unknown` — then runs one
 `clippy --all-features --all-targets --no-deps -- -D warnings` and the suite.
-It needs `rustup target add thumbv8m.main-none-eabihf` for the no_std lane
-(it installs it itself, but the target must be fetchable).
+It needs `rustup target add thumbv8m.main-none-eabihf` (no_std lane) and
+`wasm32-unknown-unknown` (wasm lane); it installs both itself, but the
+targets must be fetchable.
 
 **Do not invent a narrower gate and call it green.** The `--all-targets` line is
 load-bearing: for years the only lint was lib-scoped, so tests and benches drifted
