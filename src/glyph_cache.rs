@@ -71,6 +71,11 @@ pub enum SubpixelBin {
 
 impl SubpixelBin {
     pub fn new(pos: f32) -> (i32, Self) {
+        // `pos as i32` saturates for positions beyond the i32 axis, which
+        // leaves `fract` enormous and sends the bin logic into the ±1
+        // adjustment branches — so the adjustments below saturate too,
+        // keeping an off-axis position clamped to the axis end instead of
+        // overflowing (tests/subpixel_bin_saturates.rs).
         let trunc = pos as i32;
         let fract = pos - trunc as f32;
 
@@ -78,13 +83,13 @@ impl SubpixelBin {
             if fract > -0.125 {
                 (trunc, Self::Zero)
             } else if fract > -0.375 {
-                (trunc - 1, Self::Three)
+                (trunc.saturating_sub(1), Self::Three)
             } else if fract > -0.625 {
-                (trunc - 1, Self::Two)
+                (trunc.saturating_sub(1), Self::Two)
             } else if fract > -0.875 {
-                (trunc - 1, Self::One)
+                (trunc.saturating_sub(1), Self::One)
             } else {
-                (trunc - 1, Self::Zero)
+                (trunc.saturating_sub(1), Self::Zero)
             }
         } else {
             #[allow(clippy::collapsible_else_if)]
@@ -97,7 +102,7 @@ impl SubpixelBin {
             } else if fract < 0.875 {
                 (trunc, Self::Three)
             } else {
-                (trunc + 1, Self::Zero)
+                (trunc.saturating_add(1), Self::Zero)
             }
         }
     }

@@ -56,7 +56,7 @@
 #![allow(clippy::new_without_default)]
 // Inherited debt, allowed with eyes open
 //
-// 212 sites (measured 2026-07 via --force-warn). Overflows are only checked in
+// 207 sites (measured 2026-07 via --force-warn). Overflows are only checked in
 // debug builds; paydown is per-module and opportunistic, during refactors that
 // touch the arithmetic anyway — not a bulk checked_*/saturating_* sweep, which
 // would bury the few real overflow risks under hundreds of impossible ones.
