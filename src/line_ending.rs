@@ -59,7 +59,10 @@ impl Iterator for LineIter<'_> {
                 let after = &self.string[end..];
                 let ending = if after.starts_with("\r\n") {
                     LineEnding::CrLf
-                } else if after.starts_with("\n\r") {
+                } else if after.starts_with("\n\r") && !after.starts_with("\n\r\n") {
+                    // CRLF is atomic: in "\n\r\n" the CR begins the next
+                    // line's CRLF terminator, so this LF stands alone.
+                    // Greedy LfCr split that pair across two terminators.
                     LineEnding::LfCr
                 } else if after.starts_with('\n') {
                     LineEnding::Lf
@@ -95,4 +98,26 @@ fn test_line_iter() {
     assert_eq!(iter.next(), Some((9..11, LineEnding::Cr)));
     assert_eq!(iter.next(), Some((12..16, LineEnding::LfCr)));
     assert_eq!(iter.next(), Some((18..22, LineEnding::None)));
+}
+
+// An LF-ended line followed by a CRLF-ended empty line — the common
+// mixed-endings shape. Greedy LfCr used to eat "\n\r" and leave a stray
+// Lf, splitting the CRLF pair across two terminators; no standard
+// treats CR+LF as divisible.
+#[test]
+fn lf_before_crlf_keeps_the_crlf_pair() {
+    let mut iter = LineIter::new("A\n\r\nB");
+    assert_eq!(iter.next(), Some((0..1, LineEnding::Lf)));
+    assert_eq!(iter.next(), Some((2..2, LineEnding::CrLf)));
+    assert_eq!(iter.next(), Some((4..5, LineEnding::None)));
+    assert_eq!(iter.next(), None);
+}
+
+// Genuine legacy LfCr — no LF follows the CR — still matches.
+#[test]
+fn lfcr_still_matches_when_no_lf_follows() {
+    let mut iter = LineIter::new("A\n\rB");
+    assert_eq!(iter.next(), Some((0..1, LineEnding::LfCr)));
+    assert_eq!(iter.next(), Some((3..4, LineEnding::None)));
+    assert_eq!(iter.next(), None);
 }
