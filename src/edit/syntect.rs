@@ -320,7 +320,13 @@ impl<'buffer> Edit<'buffer> for SyntaxEditor<'_, 'buffer> {
                 }
 
                 let line = &mut buffer.lines[line_i];
-                if line.metadata().is_some() && line_i < self.syntax_cache.len() {
+                // The stamp must match the line's CURRENT index: after an
+                // insert or delete shifts lines, a stale stamp means the
+                // neighboring syntax_cache entries describe other lines, and
+                // skipping here would let a later edit seed its parse state
+                // from the wrong entry. A mismatched line reparses once and
+                // realigns the cache.
+                if line.metadata() == Some(line_i) && line_i < self.syntax_cache.len() {
                     //TODO: duplicated code!
                     if line_i >= scroll.line && total_height < scroll_end {
                         // Perform shaping and layout of this line in order to count if we have reached scroll
@@ -418,6 +424,9 @@ impl<'buffer> Edit<'buffer> for SyntaxEditor<'_, 'buffer> {
 
                 let cache_item = (parse_state.clone(), highlight_state.path.clone());
                 if line_i < self.syntax_cache.len() {
+                    // Re-stamp at the current position: this line may have
+                    // been highlighted under an older index before a shift.
+                    buffer.lines[line_i].set_metadata(line_i);
                     if self.syntax_cache[line_i] != cache_item {
                         self.syntax_cache[line_i] = cache_item;
                         if line_i + 1 < buffer.lines.len() {
