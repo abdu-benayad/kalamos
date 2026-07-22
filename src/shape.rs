@@ -2922,12 +2922,19 @@ impl ShapeLine {
             //  still be expanded)
 
             // Amount of extra width added to each blank space within a line.
+            // Clamped at zero like every alignment-correction arm above: a
+            // visual line wider than line_width must not COMPRESS its blanks
+            // (negative widths corrupt caret geometry). Probing found no
+            // public-API construction that reaches the negative branch today
+            // — overflowing lines shed their blanks during wrap — but that
+            // rests on blank-eating details far from here, not on anything
+            // this expression can see.
             let justification_expansion = if matches!(align, Align::Justified)
                 && visual_line.spaces > 0
                 // Don't justify the last line in a paragraph.
                 && index != number_of_visual_lines - 1
             {
-                (line_width - visual_line.w) / visual_line.spaces as f32
+                (line_width - visual_line.w).max(0.) / visual_line.spaces as f32
             } else {
                 0.
             };
