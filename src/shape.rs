@@ -258,7 +258,18 @@ fn shape_fallback(
             font_monospace_em_width: font.monospace_em_width(),
             font_id: font.id(),
             font_weight: attrs.weight,
-            glyph_id: info.glyph_id.try_into().expect("failed to cast glyph ID"),
+            // OpenType glyph IDs are structurally u16 (maxp.numGlyphs, cmap
+            // and GSUB outputs are all uint16); harfrust's field is u32 only
+            // because it holds codepoints before shaping. A value past
+            // u16::MAX is a shaper bug, and a render path degrades to
+            // .notdef rather than panicking on one.
+            glyph_id: u16::try_from(info.glyph_id).unwrap_or_else(|_| {
+                log::warn!(
+                    "glyph ID {} exceeds the OpenType u16 range; substituting .notdef",
+                    info.glyph_id
+                );
+                0
+            }),
             //TODO: color should not be related to shaping
             color_opt: attrs.color_opt,
             metadata: attrs.metadata,
