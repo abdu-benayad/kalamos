@@ -72,6 +72,17 @@ impl LayoutRun<'_> {
         let mut results = Vec::new();
         let mut range_opt: Option<(f32, f32)> = None;
 
+        // The per-grapheme test below only disambiguates *within* the
+        // boundary lines: on any line differing from both cursor lines it
+        // is vacuously true. That is exactly right for lines between the
+        // cursors and exactly wrong for lines outside them — without this
+        // guard a non-intersecting run reported a full-line highlight and
+        // the contract above was false (the editor never noticed because
+        // it pre-filters runs to the selection's line range).
+        if line_i < cursor_start.line || line_i > cursor_end.line {
+            return results.into_iter();
+        }
+
         for glyph in self.glyphs {
             let cluster = &self.text[glyph.start..glyph.end];
             let total = cluster.grapheme_indices(true).count().max(1);
