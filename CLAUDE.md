@@ -168,7 +168,5 @@ the suite.
 - **UDHR has no harness.** The README's UDHR result is upstream provenance —
   the harness that produced it was a windowed orbclient demo and went with the
   examples. Re-landing it as a headless test under `tests/` is open work.
-- **17 unresolved intra-doc links**, which is why `test.sh` does not yet run
-  rustdoc under `-D warnings`.
 - **`CHANGELOG.md` still ends at cosmic-text `0.19.0` (2026-04-22)** and has no
   kalamos entry.
