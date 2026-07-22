@@ -544,7 +544,17 @@ impl Buffer {
     }
 
     /// Shape lines until cursor, also scrolling to include cursor in view
-    #[allow(clippy::missing_panics_doc)]
+    ///
+    /// A cursor on a line that no longer exists — the text shrank under a
+    /// held cursor, or the pub [`Self::lines`] was truncated externally —
+    /// resolves to nothing to scroll to: the scroll window is still
+    /// shaped, and the cursor adjustment is skipped.
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "the remaining expects assert locally-provable invariants: \
+                  layout_cursor only returns in-bounds lines, and nothing \
+                  mutates `lines` before the line_layout calls on them"
+    )]
     pub fn shape_until_cursor(
         &mut self,
         font_system: &mut FontSystem,
@@ -555,9 +565,12 @@ impl Buffer {
         let metrics = self.metrics;
         let old_scroll = self.scroll;
 
-        let layout_cursor = self
-            .layout_cursor(font_system, cursor)
-            .expect("shape_until_cursor invalid cursor");
+        // The horizontal-scroll pass at the end of this function already
+        // treats an unresolvable cursor as "skip"; the vertical pass gets
+        // the same contract instead of a panic.
+        let Some(layout_cursor) = self.layout_cursor(font_system, cursor) else {
+            return;
+        };
 
         let mut layout_y = 0.0;
         let mut total_height = {
