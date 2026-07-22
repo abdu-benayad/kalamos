@@ -171,10 +171,8 @@ impl LayoutRun<'_> {
         // arrived. When no glyph ends at the index (index 0), fall through to the
         // existing search below.
         if cursor.affinity == Affinity::Before && cursor.index > 0 {
-            for (glyph_i, glyph) in self.glyphs.iter().enumerate() {
-                if cursor.index == glyph.end {
-                    return Some((glyph_i, glyph.w));
-                }
+            if let Some(found) = self.glyph_ending_at(cursor.index) {
+                return Some(found);
             }
         }
         for (glyph_i, glyph) in self.glyphs.iter().enumerate() {
@@ -196,15 +194,42 @@ impl LayoutRun<'_> {
             }
         }
         // in mixed BiDi the last logical glyph may not be the last visual glyph.
-        for (glyph_i, glyph) in self.glyphs.iter().enumerate() {
-            if cursor.index == glyph.end {
-                return Some((glyph_i, glyph.w));
-            }
+        if let Some(found) = self.glyph_ending_at(cursor.index) {
+            return Some(found);
         }
         if self.glyphs.is_empty() {
             return Some((0, 0.0));
         }
         None
+    }
+
+    /// The glyph whose trailing edge carries a caret at byte `index`, as
+    /// `(glyph_index, pixel_offset_within_glyph)`.
+    ///
+    /// A cluster shaped into several glyphs shares one byte range across all
+    /// of them, so `end == index` can match many glyphs; the caret belongs at
+    /// the cluster's far visual edge — max(x + w) for LTR, min(x) for RTL —
+    /// not at the first match. Nor the last: glyph order inside a cluster is
+    /// shaper output order, and a zero-width mark stored after its base would
+    /// put a last-match caret at the mark's x, mid-cluster.
+    fn glyph_ending_at(&self, index: usize) -> Option<(usize, f32)> {
+        self.glyphs
+            .iter()
+            .enumerate()
+            .filter(|(_, glyph)| index == glyph.end)
+            .reduce(|best, candidate| {
+                let further = if candidate.1.level.is_rtl() {
+                    candidate.1.x < best.1.x
+                } else {
+                    candidate.1.x + candidate.1.w > best.1.x + best.1.w
+                };
+                if further {
+                    candidate
+                } else {
+                    best
+                }
+            })
+            .map(|(glyph_i, glyph)| (glyph_i, glyph.w))
     }
 
     /// Get the left-edge cursor position of a glyph, accounting for paragraph direction.
