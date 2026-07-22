@@ -251,6 +251,85 @@ impl LayoutRun<'_> {
     }
 }
 
+/// One cluster's byte range and direction on a single visual line, stored in
+/// visual (base-direction) order — the minimal shape visual-order caret motion
+/// needs. A cluster is the maximal run of glyphs sharing a `[start, end)`.
+#[derive(Clone, Copy, Debug)]
+struct ClusterBound {
+    start: usize,
+    end: usize,
+    rtl: bool,
+}
+
+/// The visually-adjacent cluster index in the requested direction, or `None` at
+/// the line's edge. Glyph (hence cluster) storage is base-direction visual
+/// order: the vector index ascends with x for an LTR base line and descends for
+/// an RTL base, so the visual-right neighbour flips with the base direction.
+fn visual_neighbor(idx: usize, len: usize, base_rtl: bool, want_right: bool) -> Option<usize> {
+    if want_right != base_rtl {
+        (idx + 1 < len).then_some(idx + 1)
+    } else {
+        idx.checked_sub(1)
+    }
+}
+
+/// One visual-order caret step within a single visual line. A port of parley's
+/// `visual_clusters` + `next_visual`/`previous_visual`: locate the clusters that
+/// visually bound the cursor (disambiguated by affinity), take the one on the
+/// side of travel, and land on its far edge with the affinity that side implies.
+/// Returns `None` at the line's visual edge — the caller crosses lines, which is
+/// not where the bidi-seam bug lives. `clusters` is in visual order.
+fn visual_cluster_step(
+    clusters: &[ClusterBound],
+    base_rtl: bool,
+    index: usize,
+    affinity: Affinity,
+    go_right: bool,
+) -> Option<(usize, Affinity)> {
+    let containing = |byte: usize| {
+        clusters
+            .iter()
+            .position(|c| c.start <= byte && byte < c.end)
+    };
+    let downstream = containing(index);
+    let upstream = index.checked_sub(1).and_then(containing);
+    let neighbor = |idx: usize, right: bool| visual_neighbor(idx, clusters.len(), base_rtl, right);
+
+    // The [left, right] clusters visually bounding the cursor. `Before` attaches
+    // to the upstream cluster, `After` to the downstream one; that cluster's own
+    // direction decides which visual side it sits on.
+    let (left, right) = match affinity {
+        Affinity::Before => match upstream {
+            Some(u) if clusters[u].rtl => (neighbor(u, false), Some(u)),
+            Some(u) => (Some(u), neighbor(u, true)),
+            None => match downstream {
+                Some(d) if clusters[d].rtl => (None, Some(d)),
+                Some(d) => (Some(d), None),
+                None => (None, None),
+            },
+        },
+        Affinity::After => match downstream {
+            Some(d) if clusters[d].rtl => (Some(d), neighbor(d, true)),
+            Some(d) => (neighbor(d, false), Some(d)),
+            None => match upstream {
+                Some(u) if clusters[u].rtl => (None, Some(u)),
+                Some(u) => (Some(u), None),
+                None => (None, None),
+            },
+        },
+    };
+
+    let target = if go_right { right } else { left }?;
+    let c = clusters[target];
+    // Moving right lands on the cluster's visual-right edge, left on its
+    // visual-left edge; the edge's `(index, affinity)` follows the cluster's
+    // direction (RTL leading edge is on the right, trailing on the left).
+    Some(match (go_right, c.rtl) {
+        (true, true) | (false, false) => (c.start, Affinity::After),
+        (true, false) | (false, true) => (c.end, Affinity::Before),
+    })
+}
+
 /// An iterator of visible text lines, see [`LayoutRun`]
 #[derive(Debug)]
 pub struct LayoutRunIter<'b> {
@@ -1487,6 +1566,43 @@ impl Buffer {
         self.lines.get(line)?.shape_opt().map(|shape| shape.rtl)
     }
 
+    /// One visual-order caret step (`Left`/`Right`) within the cursor's visual
+    /// line, or `None` at the line's visual edge (where the caller falls back to
+    /// logical stepping to cross lines). This is what makes the caret follow the
+    /// run it is crossing into on a mixed-direction line, instead of the line's
+    /// base direction.
+    fn visual_horizontal_step(
+        &mut self,
+        font_system: &mut FontSystem,
+        cursor: Cursor,
+        go_right: bool,
+    ) -> Option<Cursor> {
+        let base_rtl = self.line_shape(font_system, cursor.line).map(|s| s.rtl)?;
+        let layout_i = self.layout_cursor(font_system, cursor)?.layout;
+        let clusters = {
+            let layout = self.line_layout(font_system, cursor.line)?;
+            let glyphs = &layout.get(layout_i)?.glyphs;
+            let mut clusters: Vec<ClusterBound> = Vec::new();
+            for glyph in glyphs {
+                if clusters
+                    .last()
+                    .is_some_and(|c| c.start == glyph.start && c.end == glyph.end)
+                {
+                    continue;
+                }
+                clusters.push(ClusterBound {
+                    start: glyph.start,
+                    end: glyph.end,
+                    rtl: glyph.level.is_rtl(),
+                });
+            }
+            clusters
+        };
+        let (index, affinity) =
+            visual_cluster_step(&clusters, base_rtl, cursor.index, cursor.affinity, go_right)?;
+        Some(Cursor::new_with_affinity(cursor.line, index, affinity))
+    }
+
     /// Apply a [`Motion`] to a [`Cursor`]
     pub fn cursor_motion(
         &mut self,
@@ -1569,39 +1685,28 @@ impl Buffer {
                 cursor_x_opt = None;
             }
             Motion::Left => {
-                let rtl_opt = self
-                    .line_shape(font_system, cursor.line)
-                    .map(|shape| shape.rtl);
-                if let Some(rtl) = rtl_opt {
-                    if rtl {
-                        (cursor, cursor_x_opt) =
-                            self.cursor_motion(font_system, cursor, cursor_x_opt, Motion::Next)?;
-                    } else {
-                        (cursor, cursor_x_opt) = self.cursor_motion(
-                            font_system,
-                            cursor,
-                            cursor_x_opt,
-                            Motion::Previous,
-                        )?;
-                    }
+                if let Some(new_cursor) = self.visual_horizontal_step(font_system, cursor, false) {
+                    // A visual step within the line: the fix for mixed-direction
+                    // seams. Reset the sticky column, as the logical arms do.
+                    cursor = new_cursor;
+                    cursor_x_opt = None;
+                } else if let Some(rtl) = self.line_shape(font_system, cursor.line).map(|s| s.rtl) {
+                    // At the line's visual edge: fall back to logical stepping,
+                    // which crosses to the adjacent line. Cross-line visual
+                    // traversal is out of scope; the seam bug is intra-line.
+                    let motion = if rtl { Motion::Next } else { Motion::Previous };
+                    (cursor, cursor_x_opt) =
+                        self.cursor_motion(font_system, cursor, cursor_x_opt, motion)?;
                 }
             }
             Motion::Right => {
-                let rtl_opt = self
-                    .line_shape(font_system, cursor.line)
-                    .map(|shape| shape.rtl);
-                if let Some(rtl) = rtl_opt {
-                    if rtl {
-                        (cursor, cursor_x_opt) = self.cursor_motion(
-                            font_system,
-                            cursor,
-                            cursor_x_opt,
-                            Motion::Previous,
-                        )?;
-                    } else {
-                        (cursor, cursor_x_opt) =
-                            self.cursor_motion(font_system, cursor, cursor_x_opt, Motion::Next)?;
-                    }
+                if let Some(new_cursor) = self.visual_horizontal_step(font_system, cursor, true) {
+                    cursor = new_cursor;
+                    cursor_x_opt = None;
+                } else if let Some(rtl) = self.line_shape(font_system, cursor.line).map(|s| s.rtl) {
+                    let motion = if rtl { Motion::Previous } else { Motion::Next };
+                    (cursor, cursor_x_opt) =
+                        self.cursor_motion(font_system, cursor, cursor_x_opt, motion)?;
                 }
             }
             Motion::Up => {
