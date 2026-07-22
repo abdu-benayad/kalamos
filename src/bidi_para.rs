@@ -1,57 +1,29 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use alloc::vec::Vec;
-use unicode_bidi::{bidi_class, BidiClass, BidiInfo, ParagraphInfo};
+use unicode_bidi::{bidi_class, BidiClass};
 
 /// An iterator over the paragraphs in the input text.
-/// It is equivalent to [`core::str::Lines`] but follows `unicode-bidi` behaviour.
+///
+/// A paragraph ends at any character of bidi class `B` (UAX #9
+/// `Paragraph_Separator`: LF, CR, NEL, PS, and the information separators),
+/// with CR LF consumed as a single separator. This is
+/// [`core::str::Lines`] extended to every paragraph separator — where the
+/// two disagree (lone CR, NEL, PS), the separator wins, matching how
+/// [`crate::LineEnding`] terminates lines in `set_text`.
+///
+/// Yields the paragraph *content only*; separators are consumed, never
+/// returned. Text ending in a separator does not yield a trailing empty
+/// paragraph, exactly like [`core::str::Lines`].
 #[derive(Debug)]
 pub struct BidiParagraphs<'text> {
-    text: &'text str,
-    info: alloc::vec::IntoIter<ParagraphInfo>,
+    /// The not-yet-yielded tail of the input.
+    remaining: &'text str,
 }
 
 impl<'text> BidiParagraphs<'text> {
-    /// Create an iterator with optimized paragraph detection.
-    /// This version avoids `BidiInfo` allocation for simple ASCII text.
+    /// Create an iterator over the paragraphs of `text`.
     pub fn new(text: &'text str) -> Self {
-        // Fast path for simple ASCII text - just split on newlines
-        if text.is_ascii()
-            && !text
-                .chars()
-                .any(|c| c.is_ascii_control() && c != '\n' && c != '\r' && c != '\t')
-        {
-            // For simple ASCII, we can avoid `BidiInfo` entirely
-            // Create minimal ParagraphInfo entries for each line
-            let mut paragraphs = Vec::new();
-            let mut start = 0;
-
-            for (i, c) in text.char_indices() {
-                if c == '\n' {
-                    paragraphs.push(ParagraphInfo {
-                        range: start..i,
-                        level: unicode_bidi::Level::ltr(),
-                    });
-                    start = i + 1;
-                }
-            }
-
-            // Add final paragraph if text doesn't end with newline
-            if start < text.len() {
-                paragraphs.push(ParagraphInfo {
-                    range: start..text.len(),
-                    level: unicode_bidi::Level::ltr(),
-                });
-            }
-
-            let info = paragraphs.into_iter();
-            Self { text, info }
-        } else {
-            // Complex text - fall back to full `BidiInfo` analysis
-            let info = BidiInfo::new(text, None);
-            let info = info.paragraphs.into_iter();
-            Self { text, info }
-        }
+        Self { remaining: text }
     }
 }
 
@@ -59,16 +31,31 @@ impl<'text> Iterator for BidiParagraphs<'text> {
     type Item = &'text str;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let para = self.info.next()?;
-        let paragraph = &self.text[para.range];
-        // `para.range` includes the newline that splits the line, so remove it if present
-        let mut char_indices = paragraph.char_indices();
-        char_indices
-            .next_back()
-            .and_then(|(i, c)| {
-                // `BidiClass::B` is a Paragraph_Separator (various newline characters)
-                (bidi_class(c) == BidiClass::B).then_some(i)
-            })
-            .map_or(Some(paragraph), |i| Some(&paragraph[0..i]))
+        if self.remaining.is_empty() {
+            return None;
+        }
+        let separator = self
+            .remaining
+            .char_indices()
+            .find(|&(_, c)| bidi_class(c) == BidiClass::B);
+        match separator {
+            Some((start, c)) => {
+                let paragraph = &self.remaining[..start];
+                let after = start + c.len_utf8();
+                // CR LF is one separator, not two.
+                let after = if c == '\r' && self.remaining[after..].starts_with('\n') {
+                    after + 1
+                } else {
+                    after
+                };
+                self.remaining = &self.remaining[after..];
+                Some(paragraph)
+            }
+            None => {
+                let paragraph = self.remaining;
+                self.remaining = "";
+                Some(paragraph)
+            }
+        }
     }
 }
