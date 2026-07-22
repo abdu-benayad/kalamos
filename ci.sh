@@ -20,6 +20,12 @@ rustup target add thumbv8m.main-none-eabihf
 echo Build with only no_std feature
 build --no-default-features --features no_std --target thumbv8m.main-none-eabihf
 
+echo Install target for wasm build
+rustup target add wasm32-unknown-unknown
+
+echo Build with std and wasm-web features for wasm32
+build --no-default-features --features std,wasm-web --target wasm32-unknown-unknown
+
 echo Build with only std feature
 build --no-default-features --features std
 

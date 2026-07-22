@@ -42,10 +42,14 @@ targets = [
 # If true, metadata will be collected with `--all-features`. Note that this can't
 # be toggled off if true, if you want to conditionally enable `--all-features` it
 # is recommended to pass `--all-features` on the cmd line instead
-all-features = false
+# `true` deliberately: the CI action runs cargo-deny with no arguments, so this
+# file's graph settings decide what gets audited. A zero-feature graph omitted
+# the entire `vi` stack (syntect, cosmic_undo_2, modit, bincode) — most of the
+# ignored advisories below were no-ops against it. Audit what ships.
+all-features = true
 # If true, metadata will be collected with `--no-default-features`. The same
 # caveat with `all-features` applies
-no-default-features = true
+no-default-features = false
 # If set, these feature will be enabled when collecting metadata. If `--features`
 # is specified on the cmd line they will take precedence over this option.
 #features = []
@@ -213,8 +217,10 @@ deny = [
 skip = [
     { name = "syn" },
 
-    # These three are from swash being on an older version of skrifa than harfrust and ourselves
-    { name = "font-types" },
+    # These two are from swash being on an older version of skrifa than
+    # harfrust and ourselves. (font-types converged to one version and its
+    # skip became an unnecessary-skip warning; re-add it if swash diverges
+    # again.)
     { name = "read-fonts" },
     { name = "skrifa" },
     #{ crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },

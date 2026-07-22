@@ -68,7 +68,10 @@ std = [
     "sys-locale",
     "unicode-bidi/std",
 ]
-vi = ["modit", "syntect", "cosmic_undo_2"]
+# `std` is load-bearing: cosmic_undo_2 (and syntect) are std-only, and without
+# it `--no-default-features --features no_std,vi` fails with thousands of
+# missing-libstd errors. `fontconfig` below uses the same pattern.
+vi = ["modit", "syntect", "cosmic_undo_2", "std"]
 wasm-web = ["sys-locale?/js"]
 warn_on_missing_glyphs = []
 
