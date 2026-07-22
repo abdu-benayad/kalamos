@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use alloc::collections::BTreeMap;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::hash::{Hash, Hasher};
@@ -126,7 +127,7 @@ impl From<CacheMetrics> for Metrics {
     }
 }
 /// A 4-byte `OpenType` feature tag identifier
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FeatureTag([u8; 4]);
 
 impl FeatureTag {
@@ -158,27 +159,34 @@ impl FeatureTag {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Feature {
-    pub tag: FeatureTag,
-    pub value: u32,
-}
-
+/// `OpenType` feature settings: one value per [`FeatureTag`].
+///
+/// The map model makes contradictory states unrepresentable — a tag has
+/// exactly one value, the last one written — and gives a canonical order,
+/// so two `FontFeatures` built from the same per-tag values compare and
+/// hash equal regardless of write order (they are cache-key material via
+/// [`Attrs`]).
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct FontFeatures {
-    pub features: Vec<Feature>,
+    features: BTreeMap<FeatureTag, u32>,
 }
 
 impl FontFeatures {
     pub const fn new() -> Self {
         Self {
-            features: Vec::new(),
+            features: BTreeMap::new(),
         }
     }
 
+    /// Set `tag` to `value`, replacing any earlier value for the same tag
     pub fn set(&mut self, tag: FeatureTag, value: u32) -> &mut Self {
-        self.features.push(Feature { tag, value });
+        self.features.insert(tag, value);
         self
+    }
+
+    /// The settings, in canonical (tag) order
+    pub fn iter(&self) -> impl Iterator<Item = (FeatureTag, u32)> + '_ {
+        self.features.iter().map(|(tag, value)| (*tag, *value))
     }
 
     /// Enable a feature (set to 1)
@@ -590,5 +598,53 @@ impl AttrsList {
         self.defaults = AttrsOwned::new(default);
         self.spans.clear();
         self
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    // FontFeatures holds one value per tag: enable-then-disable is the same
+    // state as disable alone, later writes win, and insertion order is not
+    // observable. The old Vec model kept every write, so two FontFeatures
+    // built from the same per-tag values compared (and hashed) unequal.
+
+    #[test]
+    fn enable_then_disable_is_disable() {
+        let mut noisy = FontFeatures::new();
+        noisy
+            .enable(FeatureTag::KERNING)
+            .disable(FeatureTag::KERNING);
+        let mut quiet = FontFeatures::new();
+        quiet.disable(FeatureTag::KERNING);
+        assert_eq!(noisy, quiet, "only the last write per tag is state");
+    }
+
+    #[test]
+    fn later_set_overwrites_earlier() {
+        let mut twice = FontFeatures::new();
+        twice
+            .set(FeatureTag::STYLISTIC_SET_1, 2)
+            .set(FeatureTag::STYLISTIC_SET_1, 5);
+        let mut once = FontFeatures::new();
+        once.set(FeatureTag::STYLISTIC_SET_1, 5);
+        assert_eq!(twice, once);
+    }
+
+    #[test]
+    fn insertion_order_is_not_observable() {
+        let mut kern_first = FontFeatures::new();
+        kern_first
+            .enable(FeatureTag::KERNING)
+            .enable(FeatureTag::STANDARD_LIGATURES);
+        let mut liga_first = FontFeatures::new();
+        liga_first
+            .enable(FeatureTag::STANDARD_LIGATURES)
+            .enable(FeatureTag::KERNING);
+        assert_eq!(
+            kern_first, liga_first,
+            "the same per-tag values are the same state regardless of write order"
+        );
     }
 }

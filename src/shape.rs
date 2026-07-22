@@ -182,11 +182,11 @@ fn shape_fallback(
     let attrs = attrs_list.get_span(start_run);
     let mut rb_font_features = Vec::new();
 
-    // Convert attrs::Feature to harfrust::Feature
-    for feature in &attrs.font_features.features {
+    // Convert the per-tag settings to harfrust::Feature
+    for (tag, value) in attrs.font_features.iter() {
         rb_font_features.push(harfrust::Feature::new(
-            harfrust::Tag::new(feature.tag.as_bytes()),
-            feature.value,
+            harfrust::Tag::new(tag.as_bytes()),
+            value,
             0..usize::MAX,
         ));
     }
