@@ -29,6 +29,19 @@ const MAGIC: [u8; 4] = *b"KLMC";
 /// written by an older version are rejected instead of misparsed.
 const VERSION: u32 = 1;
 
+// Smallest possible encodings of each variable-count record, used to bound
+// preallocation: counts come from the (corruptible) cache file, and a corrupt
+// count must not size an allocation. `remaining / MIN` is the most entries the
+// unread bytes could possibly encode, so on a well-formed cache the cap never
+// binds and capacity stays exact.
+/// Empty path (4-byte length) + mtime (8 + 4) + file length (8).
+const FILE_ENTRY_MIN_BYTES: usize = 24;
+/// File index (4) + face index (4) + family count (4) + empty post-script
+/// name (4) + style (1) + weight (2) + stretch (1) + monospaced (1).
+const FACE_ENTRY_MIN_BYTES: usize = 21;
+/// Empty family name (4-byte length).
+const FAMILY_ENTRY_MIN_BYTES: usize = 4;
+
 /// Loads the system fonts into `db`, using the on-disk cache at `cache_path` when it is
 /// present and still valid.
 ///
@@ -129,7 +142,7 @@ fn try_load(cache_path: &Path) -> Option<Vec<FaceInfo>> {
 
     // File fingerprint
     let file_count = r.u32()? as usize;
-    let mut files = Vec::with_capacity(file_count);
+    let mut files = Vec::with_capacity(file_count.min(r.remaining() / FILE_ENTRY_MIN_BYTES));
     for _ in 0..file_count {
         let path = r.path()?;
         let mtime = r.mtime()?;
@@ -143,14 +156,15 @@ fn try_load(cache_path: &Path) -> Option<Vec<FaceInfo>> {
 
     // Face table. Each face references a file by index into `files`.
     let face_count = r.u32()? as usize;
-    let mut faces = Vec::with_capacity(face_count);
+    let mut faces = Vec::with_capacity(face_count.min(r.remaining() / FACE_ENTRY_MIN_BYTES));
     for _ in 0..face_count {
         let file_index = r.u32()? as usize;
         let source_path = files.get(file_index)?.clone();
         let index = r.u32()?;
 
         let family_count = r.u32()? as usize;
-        let mut families = Vec::with_capacity(family_count);
+        let mut families =
+            Vec::with_capacity(family_count.min(r.remaining() / FAMILY_ENTRY_MIN_BYTES));
         for _ in 0..family_count {
             // TODO: Language is not persisted, but it is also not used
             families.push((r.string()?, fontdb::Language::Unknown));
@@ -385,6 +399,12 @@ impl<'a> Reader<'a> {
         Self { data, pos: 0 }
     }
 
+    /// Bytes not yet consumed — the physical bound on how many entries any
+    /// count field could still describe.
+    fn remaining(&self) -> usize {
+        self.data.len().saturating_sub(self.pos)
+    }
+
     fn take(&mut self, len: usize) -> Option<&'a [u8]> {
         let end = self.pos.checked_add(len)?;
         let slice = self.data.get(self.pos..end)?;
@@ -420,5 +440,115 @@ impl<'a> Reader<'a> {
 
     fn path(&mut self) -> Option<PathBuf> {
         Some(PathBuf::from(self.string()?))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    // What these tests guard: the three variable-count records (files,
+    // faces, families) used to size Vec::with_capacity straight from u32
+    // counts in the cache file — a corrupt count requested an enormous
+    // allocation before any entry was validated. The preallocations are
+    // now capped by Reader::remaining() / MIN_ENTRY_BYTES. Allocator
+    // behavior is not portably observable from a test, so the bound is
+    // structural; what is pinned is that corrupt counts reject the cache
+    // (None) and that the cap does not break a well-formed roundtrip.
+
+    /// A cache image referencing `font_path` (fingerprint checks only
+    /// mtime + length, so any real file serves), holding one face with
+    /// one family — with each count overridable to a corrupt value.
+    fn cache_bytes(
+        font_path: &Path,
+        file_count: u32,
+        face_count: u32,
+        family_count: u32,
+    ) -> Vec<u8> {
+        let (mtime, len) = file_fingerprint(font_path).expect("fixture file exists");
+        let mut w = Writer::new();
+        w.bytes(&MAGIC);
+        w.u32(VERSION);
+        w.u32(0); // no directory fingerprints
+        w.u32(file_count);
+        w.path(font_path);
+        w.mtime(mtime);
+        w.u64(len);
+        w.u32(face_count);
+        w.u32(0); // file index
+        w.u32(0); // face index within the file
+        w.u32(family_count);
+        w.string("Test Family");
+        w.string("Test-Regular");
+        w.u8(0); // Style::Normal
+        w.u16(400);
+        w.u8(5); // Stretch::Normal
+        w.u8(0); // not monospaced
+        w.into_inner()
+    }
+
+    /// A scratch file under the system temp dir, distinct per test.
+    fn scratch(name: &str, contents: &[u8]) -> PathBuf {
+        let mut path = std::env::temp_dir();
+        path.push(format!(
+            "kalamos-font-cache-test-{}-{name}",
+            std::process::id()
+        ));
+        std::fs::write(&path, contents).expect("scratch file is writable");
+        path
+    }
+
+    fn try_load_image(name: &str, image: &[u8]) -> Option<Vec<FaceInfo>> {
+        let cache_path = scratch(name, image);
+        let result = try_load(&cache_path);
+        let _ = std::fs::remove_file(&cache_path);
+        result
+    }
+
+    #[test]
+    fn well_formed_cache_roundtrips() {
+        let font_path = scratch("font-roundtrip", b"not really a font");
+        let faces = try_load_image("cache-roundtrip", &cache_bytes(&font_path, 1, 1, 1))
+            .expect("well-formed cache loads");
+        let _ = std::fs::remove_file(&font_path);
+
+        assert_eq!(faces.len(), 1);
+        let face = &faces[0];
+        let Source::File(source_path) = &face.source else {
+            unreachable!("the cache stores file sources only");
+        };
+        assert_eq!(source_path, &font_path);
+        assert_eq!(face.index, 0);
+        assert_eq!(face.families.len(), 1);
+        assert_eq!(face.families[0].0, "Test Family");
+        assert_eq!(face.post_script_name, "Test-Regular");
+        assert_eq!(face.style, Style::Normal);
+        assert_eq!(face.weight, Weight(400));
+        assert_eq!(face.stretch, Stretch::Normal);
+        assert!(!face.monospaced);
+    }
+
+    #[test]
+    fn corrupt_file_count_rejects_cache() {
+        let font_path = scratch("font-filecount", b"not really a font");
+        let image = cache_bytes(&font_path, u32::MAX, 1, 1);
+        assert!(try_load_image("cache-filecount", &image).is_none());
+        let _ = std::fs::remove_file(&font_path);
+    }
+
+    #[test]
+    fn corrupt_face_count_rejects_cache() {
+        let font_path = scratch("font-facecount", b"not really a font");
+        let image = cache_bytes(&font_path, 1, u32::MAX, 1);
+        assert!(try_load_image("cache-facecount", &image).is_none());
+        let _ = std::fs::remove_file(&font_path);
+    }
+
+    #[test]
+    fn corrupt_family_count_rejects_cache() {
+        let font_path = scratch("font-familycount", b"not really a font");
+        let image = cache_bytes(&font_path, 1, 1, u32::MAX);
+        assert!(try_load_image("cache-familycount", &image).is_none());
+        let _ = std::fs::remove_file(&font_path);
     }
 }
