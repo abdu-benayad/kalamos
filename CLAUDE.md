@@ -140,11 +140,17 @@ the suite.
 ## Conventions
 
 - The crate `deny`s `clippy::unwrap_used`, `missing_debug_implementations` and
-  more. These live as **inner attributes at `src/lib.rs:56-87`**, not a `[lints]`
+  more. These live as **inner attributes at `src/lib.rs:56-110`**, not a `[lints]`
   table — deliberately, since a package-level `[lints]` would push
   `deny(unwrap_used)` onto tests and benches where `unwrap()` is legitimate.
+- `clippy::indexing_slicing` is a **ratchet**: the crate denies it, and the six
+  modules still carrying inherited index sites are `allow`ed at their `mod`
+  items in `src/lib.rs` with counts in the reasons. Clean and new modules are
+  born protected; remove a module's allow when its last site is paid off.
 - Suppressions carry a `reason`. Prefer `#[expect]`; use `allow` only where
-  `expect` is technically wrong (see above) and say why inline.
+  `expect` is technically wrong (see above) or deliberately transitional (the
+  ratchet's module attributes, which an `expect` would turn red mid-paydown),
+  and say why inline.
 - `cargo fmt` before committing — `ci.sh` checks it first and fails fast.
 - Every commit leaves `ci.sh` green. There is no PR to catch a broken one.
 

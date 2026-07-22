@@ -61,11 +61,17 @@
 // touch the arithmetic anyway — not a bulk checked_*/saturating_* sweep, which
 // would bury the few real overflow risks under hundreds of impossible ones.
 #![allow(clippy::arithmetic_side_effects)]
-// 134 sites (measured 2026-07 via --force-warn). A blind `x[i]` → `.get(i)`
-// conversion trades silently-correct hot-path code for noisy panic paths or
-// bogus Options; index sites get replaced per-module when their surrounding
-// logic is redesigned, not en masse.
-#![allow(clippy::indexing_slicing)]
+// Out-of-bounds indexing is a hidden panic path. The crate-wide gate is deny;
+// the six modules still carrying inherited index sites are `allow`ed at their
+// `mod` items below (134 sites total, measured 2026-07 via --force-warn), so
+// every clean module — and every new one — is born protected. A blind
+// `x[i]` → `.get(i)` sweep would trade silently-correct hot-path code for
+// noisy panic paths or bogus Options; sites get replaced per-module when
+// their surrounding logic is redesigned, and each module's allow is removed
+// when it reaches zero. The module attributes are `allow`, not `expect`,
+// deliberately: an `expect` would go red on the unrelated commit that happens
+// to pay off a module's last site mid-refactor.
+#![deny(clippy::indexing_slicing)]
 // Soundness issues
 //
 // Dereferencing unaligned pointers may be undefined behavior
@@ -115,6 +121,10 @@ pub use self::bidi_para::*;
 mod bidi_para;
 
 pub use self::buffer::*;
+#[allow(
+    clippy::indexing_slicing,
+    reason = "inherited index debt: 14 sites (2026-07)"
+)]
 mod buffer;
 
 pub use self::buffer_line::*;
@@ -130,9 +140,17 @@ pub use self::cursor::*;
 mod cursor;
 
 pub use self::edit::*;
+#[allow(
+    clippy::indexing_slicing,
+    reason = "inherited index debt: 45 sites (2026-07) — editor 16, vi 19, syntect 7, mod 3"
+)]
 mod edit;
 
 pub use self::font::*;
+#[allow(
+    clippy::indexing_slicing,
+    reason = "inherited index debt: 10 sites (2026-07) — fallback 9, cache 1"
+)]
 mod font;
 
 pub use self::layout::*;
@@ -142,9 +160,17 @@ pub use self::line_ending::*;
 mod line_ending;
 
 pub use self::render::*;
+#[allow(
+    clippy::indexing_slicing,
+    reason = "inherited index debt: 1 site (2026-07)"
+)]
 mod render;
 
 pub use self::shape::*;
+#[allow(
+    clippy::indexing_slicing,
+    reason = "inherited index debt: 60 sites (2026-07)"
+)]
 mod shape;
 
 pub use self::shape_run_cache::*;
@@ -153,6 +179,10 @@ mod shape_run_cache;
 #[cfg(feature = "swash")]
 pub use self::swash::*;
 #[cfg(feature = "swash")]
+#[allow(
+    clippy::indexing_slicing,
+    reason = "inherited index debt: 5 sites (2026-07)"
+)]
 mod swash;
 
 mod math;
