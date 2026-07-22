@@ -153,6 +153,9 @@ impl<'buffer> Editor<'buffer> {
                                 renderer.rectangle(
                                     min,
                                     line_top as i32,
+                                    // min and max are i32, so max(0, ..) genuinely
+                                    // clamps a negative width — this is not the
+                                    // usize wrap-before-clamp mistake it resembles.
                                     cmp::max(0, max - min) as u32,
                                     line_height as u32,
                                     selection_color,
