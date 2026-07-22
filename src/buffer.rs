@@ -388,6 +388,22 @@ impl Clone for Buffer {
     }
 }
 
+/// Both metrics fields must be strictly positive and finite: layout and
+/// cursor motion divide by them, and NaN, ±∞, and negatives all pass an
+/// `assert_ne!(x, 0.0)` — NaN because it compares unequal to everything.
+fn assert_metrics_valid(metrics: &Metrics) {
+    assert!(
+        metrics.font_size > 0.0 && metrics.font_size.is_finite(),
+        "font size must be strictly positive and finite, got {}",
+        metrics.font_size
+    );
+    assert!(
+        metrics.line_height > 0.0 && metrics.line_height.is_finite(),
+        "line height must be strictly positive and finite, got {}",
+        metrics.line_height
+    );
+}
+
 impl Buffer {
     /// Create an empty [`Buffer`] with the provided [`Metrics`].
     /// This is useful for initializing a [`Buffer`] without a [`FontSystem`].
@@ -399,9 +415,10 @@ impl Buffer {
     ///
     /// # Panics
     ///
-    /// Will panic if `metrics.line_height` is zero.
+    /// Will panic if `metrics.font_size` or `metrics.line_height` is not
+    /// strictly positive and finite.
     pub fn new_empty(metrics: Metrics) -> Self {
-        assert_ne!(metrics.line_height, 0.0, "line height cannot be 0");
+        assert_metrics_valid(&metrics);
         Self {
             lines: Vec::new(),
             metrics,
@@ -794,11 +811,11 @@ impl Buffer {
     ///
     /// # Panics
     ///
-    /// Will panic if `metrics.font_size` is zero.
+    /// Will panic if `metrics.font_size` or `metrics.line_height` is not
+    /// strictly positive and finite.
     pub fn set_metrics(&mut self, metrics: Metrics) {
         if metrics != self.metrics {
-            assert_ne!(metrics.font_size, 0.0, "font size cannot be 0");
-            assert_ne!(metrics.line_height, 0.0, "line height cannot be 0");
+            assert_metrics_valid(&metrics);
             self.metrics = metrics;
             self.dirty |= DirtyFlags::RELAYOUT;
             self.redraw = true;
@@ -1571,7 +1588,11 @@ impl Buffer {
             }
             Motion::Vertical(px) => {
                 // TODO more efficient, use layout run line height
-                let lines = px / self.metrics().line_height as i32;
+                //
+                // Float division, then a saturating cast: the old
+                // `px / line_height as i32` truncated any line height in
+                // (0, 1) to zero and panicked on the integer division.
+                let lines = (px as f32 / self.metrics().line_height) as i32;
                 match lines.cmp(&0) {
                     cmp::Ordering::Less => {
                         for _ in 0..-lines {
