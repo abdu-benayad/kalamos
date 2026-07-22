@@ -1065,12 +1065,19 @@ impl ShapeSpan {
                         if let Some(font) = font_iter.next() {
                             let mut glyphs = Vec::new();
                             let scratch = font_iter.shape_caches();
+                            // The probe text lives at offsets 0..len, so
+                            // shaping against the LINE's attrs_list would
+                            // resolve features and weight from the line's
+                            // first span. The decision belongs to the break
+                            // position's attrs — the same ones that chose
+                            // the font above.
+                            let probe_attrs_list = AttrsList::new(&attrs);
                             shape_fallback(
                                 scratch,
                                 &mut glyphs,
                                 &font,
                                 &probe_text,
-                                attrs_list,
+                                &probe_attrs_list,
                                 0,
                                 probe_text.len(),
                                 false,
