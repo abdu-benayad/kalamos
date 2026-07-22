@@ -442,13 +442,54 @@ impl Buffer {
         }
     }
 
+    /// True if some line in the current scroll window lacks a usable layout,
+    /// or the scroll itself is stale (out of range, or mid-adjustment with a
+    /// negative offset), so the shaping loop in [`Self::shape_until_scroll`]
+    /// would do real work.
+    ///
+    /// Mirrors that loop's height accumulation: a line's layout is the only
+    /// source of its height, so the first line without one is both the first
+    /// line needing work and the point past which the window cannot be
+    /// measured anyway.
+    fn scroll_window_needs_shaping(&self) -> bool {
+        if self.lines.is_empty() {
+            return false;
+        }
+        if self.scroll.line >= self.lines.len() || self.scroll.vertical < 0.0 {
+            return true;
+        }
+        let scroll_end = self.scroll.vertical + self.height_opt.unwrap_or(f32::INFINITY);
+        let mut total_height = 0.0;
+        for line in self.lines.iter().skip(self.scroll.line) {
+            if total_height > scroll_end {
+                return false;
+            }
+            match line.layout_opt() {
+                Some(layout) => {
+                    for layout_line in layout {
+                        total_height += layout_line
+                            .line_height_opt
+                            .unwrap_or(self.metrics.line_height);
+                    }
+                }
+                None => return true,
+            }
+        }
+        false
+    }
+
     /// Process dirty flags: invalidate shape/layout caches as needed, then clear flags.
     /// Returns `true` if any flags were set (i.e., work may be needed).
     fn resolve_dirty(&mut self) -> bool {
         let dirty = self.dirty;
         if dirty.is_empty() {
-            // individual lines may have been externally invalidated
-            if self.lines.iter().any(|line| line.needs_reshaping()) {
+            // The public `lines` field can be mutated directly, with no flag
+            // set: a freshly pushed line is `Cached::Empty`, an externally
+            // reset one `Cached::Unused`. Either *inside* the scroll window
+            // means the shaping loop has work to do. Lines outside the
+            // window are expected to be unshaped — `shape_until_scroll`
+            // prunes them itself — so their state alone signals nothing.
+            if self.scroll_window_needs_shaping() {
                 self.redraw = true;
                 return true;
             }
