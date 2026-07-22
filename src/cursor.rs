@@ -1,7 +1,7 @@
 /// Current cursor location
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Cursor {
-    /// Index of [`BufferLine`] in [`Buffer::lines`]
+    /// Index of [`BufferLine`](crate::BufferLine) in [`Buffer::lines`](crate::Buffer::lines)
     pub line: usize,
     /// First-byte-index of glyph at cursor (will insert behind this glyph)
     pub index: usize,
@@ -60,14 +60,14 @@ impl Affinity {
     }
 }
 
-/// The position of a cursor within a [`Buffer`].
+/// The position of a cursor within a [`Buffer`](crate::Buffer).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct LayoutCursor {
-    /// Index of [`BufferLine`] in [`Buffer::lines`]
+    /// Index of [`BufferLine`](crate::BufferLine) in [`Buffer::lines`](crate::Buffer::lines)
     pub line: usize,
-    /// Index of [`LayoutLine`] in [`BufferLine::layout`]
+    /// Index of [`LayoutLine`](crate::LayoutLine) in [`BufferLine::layout`](crate::BufferLine::layout)
     pub layout: usize,
-    /// Index of [`LayoutGlyph`] in [`LayoutLine::glyphs`]
+    /// Index of [`LayoutGlyph`](crate::LayoutGlyph) in [`LayoutLine::glyphs`](crate::LayoutLine::glyphs)
     pub glyph: usize,
 }
 
@@ -131,16 +131,22 @@ pub enum Motion {
     GotoLine(usize),
 }
 
-/// Scroll position in [`Buffer`]
+/// Scroll position in [`Buffer`](crate::Buffer)
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub struct Scroll {
-    /// Index of [`BufferLine`] in [`Buffer::lines`]. This will be adjusted as needed if layout is
+    /// Index of [`BufferLine`](crate::BufferLine) in [`Buffer::lines`](crate::Buffer::lines). This will be adjusted as needed if layout is
     /// out of bounds
     pub line: usize,
-    /// Pixel offset from the start of the [`BufferLine`]. This will be adjusted as needed
-    /// if it is negative or exceeds the height of the [`BufferLine::layout`] lines.
+    /// Pixel offset from the start of the [`BufferLine`](crate::BufferLine). This will be adjusted as needed
+    /// if it is negative or exceeds the height of the [`BufferLine::layout`](crate::BufferLine::layout) lines.
     pub vertical: f32,
-    /// The horizontal position of scroll in fractional pixels
+    /// The horizontal position of scroll in fractional pixels.
+    ///
+    /// The buffer only *maintains* this value: the cursor-visibility pass in
+    /// [`Buffer::shape_until_cursor`](crate::Buffer::shape_until_cursor)
+    /// adjusts it so the cursor stays inside the viewport, but no in-crate
+    /// layout or draw path applies it — glyph positions are unshifted.
+    /// Offsetting painted glyphs by `-horizontal` is the embedder's job.
     pub horizontal: f32,
 }
 

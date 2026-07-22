@@ -15,7 +15,7 @@ use crate::{
     Selection, Shaping,
 };
 
-/// A wrapper of [`Buffer`] for easy editing
+/// A wrapper of [`Buffer`](crate::Buffer) for easy editing
 #[derive(Debug, Clone)]
 pub struct Editor<'buffer> {
     buffer_ref: BufferRef<'buffer>,
@@ -33,7 +33,7 @@ fn cursor_position(cursor: &Cursor, run: &LayoutRun) -> Option<(i32, i32)> {
 }
 
 impl<'buffer> Editor<'buffer> {
-    /// Create a new [`Editor`] with the provided [`Buffer`]
+    /// Create a new [`Editor`] with the provided [`Buffer`](crate::Buffer)
     pub fn new(buffer: impl Into<BufferRef<'buffer>>) -> Self {
         Self {
             buffer_ref: buffer.into(),

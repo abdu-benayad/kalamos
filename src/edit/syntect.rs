@@ -43,7 +43,7 @@ pub struct SyntaxEditor<'syntax_system, 'buffer> {
 }
 
 impl<'syntax_system, 'buffer> SyntaxEditor<'syntax_system, 'buffer> {
-    /// Create a new [`SyntaxEditor`] with the provided [`Buffer`], [`SyntaxSystem`], and theme name.
+    /// Create a new [`SyntaxEditor`] with the provided [`Buffer`](crate::Buffer), [`SyntaxSystem`], and theme name.
     ///
     /// A good default theme name is "base16-eighties.dark".
     ///

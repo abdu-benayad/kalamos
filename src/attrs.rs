@@ -117,7 +117,7 @@ fn canonical_bits(value: f32) -> u32 {
 
 /// Metrics, but implementing Eq and Hash using u32 representation of f32
 ///
-/// Construction canonicalizes via [`canonical_bits`], so the roundtrip back
+/// Construction canonicalizes the bits (`canonical_bits`), so the roundtrip back
 /// to [`Metrics`] returns +0.0 for -0.0 and the canonical NaN for any NaN —
 /// indistinguishable under f32 `==`, which is the point: values that compare
 /// equal share one cache identity.

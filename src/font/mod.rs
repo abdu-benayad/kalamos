@@ -6,7 +6,8 @@ use skrifa::raw::{ReadError, TableProvider as _};
 use skrifa::{metrics::Metrics, prelude::*};
 // re-export skrifa
 pub use skrifa;
-// re-export peniko::Font;
+// linebender_resource_handle::FontData is the type peniko re-exports as
+// peniko::Font; publish it under that role name without depending on peniko.
 #[cfg(feature = "peniko")]
 pub use linebender_resource_handle::FontData as PenikoFont;
 
