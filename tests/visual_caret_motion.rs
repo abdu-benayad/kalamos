@@ -198,3 +198,99 @@ fn rtl_right_walk_stays_monotonic() {
             )
     );
 }
+
+/// **The RTL-base counterpart to the seam test above, and the case the other four miss.**
+///
+/// The fences above cover an LTR base with an embedded Arabic run, a pure-LTR line and a
+/// pure-RTL line. None covers an **RTL base with an embedded LTR run** — `المبلغ 250`, an
+/// Arabic field holding digits, which is the ordinary kiosk string. Two defects lived in
+/// that gap, and both are visible only here:
+///
+/// 1. At `(0, Before)` the visual step reported "line edge" and returned `None`, because
+///    the no-upstream arm of `visual_cluster_step` had its RTL and LTR cases inverted. The
+///    logical fallback answered instead and happened to give the right byte, so nothing
+///    looked wrong — the visual walk was not being taken at all for the first step.
+/// 2. At the visual-LEFT stop — which on this line is *mid-text*, inside the digit run, not
+///    the logical end — the edge fallback stepped logically by the line's **base**
+///    direction. That walked the caret back into the middle of the line, visually
+///    rightward; the next `Left` walked it back onto the edge; and so on forever. The
+///    caret oscillated between two stops under a held arrow key.
+///
+/// So this walks further than there are clusters: past the visual edge, where the caret must
+/// simply stop. `x` never increasing is what fails on (2); reaching x ≈ 0 at all is what
+/// fails on (1).
+#[test]
+fn left_walk_on_an_rtl_base_line_ends_at_the_visual_edge_and_stays() {
+    let mut font_system = font_system();
+    let mut buffer = buffer_of(&mut font_system, "المبلغ 250");
+    // `buffer_of` sets `Direction::Auto`; the leading Arabic already resolves the base to
+    // RTL, which is the configuration under test.
+    let run = buffer.layout_runs().next().expect("one visual line");
+    assert!(run.rtl, "the line under test must have an RTL base");
+    let line_left = run.glyphs.iter().map(|g| g.x).fold(f32::INFINITY, f32::min);
+
+    // Deliberately more steps than clusters, so the walk runs past the visual edge.
+    let steps = cluster_count(&buffer) + 3;
+    let mut cursor = Cursor::new(0, 0);
+    let mut cursor_x_opt = None;
+    let mut x_prev = caret_x(&buffer, &cursor);
+    for step in 0..steps {
+        (cursor, cursor_x_opt) = buffer
+            .cursor_motion(&mut font_system, cursor, cursor_x_opt, Motion::Left)
+            .expect("left resolves");
+        let x = caret_x(&buffer, &cursor);
+        assert!(
+            x <= x_prev + 0.01,
+            "step {step}: caret jumped right (x {x} > prev {x_prev}) — the edge fallback \
+             stepped by the line's base direction instead of stopping"
+        );
+        x_prev = x;
+    }
+    assert!(
+        (x_prev - line_left).abs() < 0.01,
+        "the walk ended at x {x_prev}, not the line's visual-left edge {line_left} — the \
+         first step never took the visual path"
+    );
+}
+
+/// The `Right` direction of the same line: from the visual-left stop back to the
+/// visual-right one, then terminal. Without it, a fix that made `Left` terminal by
+/// disabling the fallback in *both* directions would still pass the test above.
+#[test]
+fn right_walk_on_an_rtl_base_line_ends_at_the_visual_edge_and_stays() {
+    let mut font_system = font_system();
+    let mut buffer = buffer_of(&mut font_system, "المبلغ 250");
+    let run = buffer.layout_runs().next().expect("one visual line");
+    let line_right = run
+        .glyphs
+        .iter()
+        .map(|g| g.x + g.w)
+        .fold(f32::NEG_INFINITY, f32::max);
+
+    // Walk all the way left first, so the start is the visual-left stop whatever its bytes.
+    let steps = cluster_count(&buffer) + 3;
+    let mut cursor = Cursor::new(0, 0);
+    let mut cursor_x_opt = None;
+    for _ in 0..steps {
+        (cursor, cursor_x_opt) = buffer
+            .cursor_motion(&mut font_system, cursor, cursor_x_opt, Motion::Left)
+            .expect("left resolves");
+    }
+
+    let mut x_prev = caret_x(&buffer, &cursor);
+    for step in 0..steps {
+        (cursor, cursor_x_opt) = buffer
+            .cursor_motion(&mut font_system, cursor, cursor_x_opt, Motion::Right)
+            .expect("right resolves");
+        let x = caret_x(&buffer, &cursor);
+        assert!(
+            x >= x_prev - 0.01,
+            "step {step}: caret jumped left (x {x} < prev {x_prev})"
+        );
+        x_prev = x;
+    }
+    assert!(
+        (x_prev - line_right).abs() < 0.01,
+        "the walk ended at x {x_prev}, not the line's visual-right edge {line_right}"
+    );
+}

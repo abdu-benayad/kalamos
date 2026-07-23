@@ -302,9 +302,16 @@ fn visual_cluster_step(
         Affinity::Before => match upstream {
             Some(u) if clusters[u].rtl => (neighbor(u, false), Some(u)),
             Some(u) => (Some(u), neighbor(u, true)),
+            // No upstream cluster: the cursor is at the text's logical start, sitting
+            // on the *leading* edge of the downstream cluster — the right edge if that
+            // cluster is RTL, the left edge if it is LTR. So an RTL cluster lies to the
+            // cursor's LEFT and an LTR one to its RIGHT, mirroring the `After`/no-
+            // downstream arm below. Inverting these two strands the caret: the step it
+            // should have taken reports "line edge" and the logical fallback answers
+            // instead, which is only accidentally right.
             None => match downstream {
-                Some(d) if clusters[d].rtl => (None, Some(d)),
-                Some(d) => (Some(d), None),
+                Some(d) if clusters[d].rtl => (Some(d), None),
+                Some(d) => (None, Some(d)),
                 None => (None, None),
             },
         },
@@ -1566,6 +1573,34 @@ impl Buffer {
         self.lines.get(line)?.shape_opt().map(|shape| shape.rtl)
     }
 
+    /// Whether a logical step from `from` to `to` left the visual line it started on.
+    ///
+    /// The gate on the edge fallback below. That fallback exists only to cross to the
+    /// adjacent line, and `Motion::Next`/`Previous` leave a line only when the cursor sits
+    /// at its *logical* boundary — which at a mixed-direction line's *visual* edge is a
+    /// different place. On an RTL-base line whose visually-leftmost run is LTR
+    /// (`المبلغ 250`), the visual-left stop is mid-text, so the logical step walks back
+    /// into the middle of the line — visually rightward — and the next `Left` steps
+    /// visually back onto the edge, forever. Refusing a step that never left the line
+    /// makes the visual edge terminal, which is what it already looks like on screen.
+    ///
+    /// A cursor that will not resolve to a layout position counts as not having crossed:
+    /// the caller then leaves the caret alone, which is the safe reading of "this motion
+    /// went nowhere".
+    fn leaves_visual_line(
+        &mut self,
+        font_system: &mut FontSystem,
+        from: Cursor,
+        to: Cursor,
+    ) -> bool {
+        let before = self.layout_cursor(font_system, from).map(|lc| lc.layout);
+        let after = self.layout_cursor(font_system, to).map(|lc| lc.layout);
+        match (before, after) {
+            (Some(before), Some(after)) => (from.line, before) != (to.line, after),
+            _ => false,
+        }
+    }
+
     /// One visual-order caret step (`Left`/`Right`) within the cursor's visual
     /// line, or `None` at the line's visual edge (where the caller falls back to
     /// logical stepping to cross lines). This is what makes the caret follow the
@@ -1694,9 +1729,14 @@ impl Buffer {
                     // At the line's visual edge: fall back to logical stepping,
                     // which crosses to the adjacent line. Cross-line visual
                     // traversal is out of scope; the seam bug is intra-line.
+                    // Taken only if it actually crosses — see `leaves_visual_line`.
                     let motion = if rtl { Motion::Next } else { Motion::Previous };
-                    (cursor, cursor_x_opt) =
+                    let (candidate, candidate_x) =
                         self.cursor_motion(font_system, cursor, cursor_x_opt, motion)?;
+                    if self.leaves_visual_line(font_system, cursor, candidate) {
+                        cursor = candidate;
+                        cursor_x_opt = candidate_x;
+                    }
                 }
             }
             Motion::Right => {
@@ -1705,8 +1745,12 @@ impl Buffer {
                     cursor_x_opt = None;
                 } else if let Some(rtl) = self.line_shape(font_system, cursor.line).map(|s| s.rtl) {
                     let motion = if rtl { Motion::Previous } else { Motion::Next };
-                    (cursor, cursor_x_opt) =
+                    let (candidate, candidate_x) =
                         self.cursor_motion(font_system, cursor, cursor_x_opt, motion)?;
+                    if self.leaves_visual_line(font_system, cursor, candidate) {
+                        cursor = candidate;
+                        cursor_x_opt = candidate_x;
+                    }
                 }
             }
             Motion::Up => {
