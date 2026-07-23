@@ -285,17 +285,30 @@ pub struct DecorationMetrics {
     pub thickness: f32,
 }
 
+/// The decoration geometry a font itself declares, in EM units — where that font wants an
+/// underline, a strikethrough and (via [`ascent`](Self::ascent)) an overline drawn, at what
+/// thickness.
+///
+/// Independent of whether any text asked for a decoration: it is a property of the face, not
+/// of a [`TextDecoration`]. Read it with [`Font::decoration_metrics`](crate::Font::decoration_metrics)
+/// to place a decoration line a caller draws itself — a link underline painted at hover time,
+/// say, where routing the decoration through [`Attrs`] would mean reshaping the text.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FontDecorationMetrics {
+    /// Underline offset and thickness.
+    pub underline: DecorationMetrics,
+    /// Strikethrough offset and thickness.
+    pub strikethrough: DecorationMetrics,
+    /// Font ascent in EM units (`ascent / upem`). Used for overline positioning.
+    pub ascent: f32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlyphDecorationData {
     /// The text decoration configuration from the user
     pub text_decoration: TextDecoration,
-    /// Underline offset and thickness from the font
-    pub underline_metrics: DecorationMetrics,
-    /// Strikethrough offset and thickness from the font
-    pub strikethrough_metrics: DecorationMetrics,
-    /// Font ascent in EM units (ascent / upem).
-    /// Used for overline positioning
-    pub ascent: f32,
+    /// Where the span's font wants those decorations drawn
+    pub font: FontDecorationMetrics,
 }
 
 /// Text attributes

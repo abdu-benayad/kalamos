@@ -4,9 +4,9 @@
 
 use crate::fallback::FontFallbackIter;
 use crate::{
-    math, Align, Attrs, AttrsList, CacheKeyFlags, Color, DecorationMetrics, DecorationSpan,
-    Ellipsize, EllipsizeHeightLimit, Font, FontSystem, GlyphDecorationData, Hinting, LayoutGlyph,
-    LayoutLine, Metrics, Wrap,
+    math, Align, Attrs, AttrsList, CacheKeyFlags, Color, DecorationSpan, Ellipsize,
+    EllipsizeHeightLimit, Font, FontSystem, GlyphDecorationData, Hinting, LayoutGlyph, LayoutLine,
+    Metrics, Wrap,
 };
 // Only the swash-gated fallback path names a family directly.
 #[cfg(feature = "swash")]
@@ -744,29 +744,6 @@ impl ShapeGlyph {
     }
 }
 
-fn decoration_metrics(font: &Font) -> (DecorationMetrics, DecorationMetrics, f32) {
-    let metrics = font.metrics();
-    let upem = metrics.units_per_em as f32;
-    if upem == 0.0 {
-        return (
-            DecorationMetrics::default(),
-            DecorationMetrics::default(),
-            0.0,
-        );
-    }
-    (
-        DecorationMetrics {
-            offset: metrics.underline.map_or(-0.125, |d| d.offset / upem),
-            thickness: metrics.underline.map_or(1.0 / 14.0, |d| d.thickness / upem),
-        },
-        DecorationMetrics {
-            offset: metrics.strikeout.map_or(0.3, |d| d.offset / upem),
-            thickness: metrics.strikeout.map_or(1.0 / 14.0, |d| d.thickness / upem),
-        },
-        metrics.ascent / upem,
-    )
-}
-
 /// span index used in `VlRange` to indicate this range is the ellipsis.
 const ELLIPSIS_SPAN: usize = usize::MAX;
 
@@ -1208,10 +1185,10 @@ impl ShapeSpan {
                 .and_then(|glyph| {
                     font_system
                         .get_font(glyph.font_id, glyph.font_weight)
-                        .map(|font| decoration_metrics(&font))
+                        .map(|font| font.decoration_metrics())
                 });
 
-            if let Some((ul_metrics, st_metrics, ascent)) = primary_metrics {
+            if let Some(font_metrics) = primary_metrics {
                 // Track which sub-ranges of span_range are covered by explicit spans
                 let mut covered_end = span_range.start;
 
@@ -1231,9 +1208,7 @@ impl ShapeSpan {
                                 covered_end..start,
                                 GlyphDecorationData {
                                     text_decoration: default_attrs.text_decoration,
-                                    underline_metrics: ul_metrics,
-                                    strikethrough_metrics: st_metrics,
-                                    ascent,
+                                    font: font_metrics,
                                 },
                             ));
                         }
@@ -1246,9 +1221,7 @@ impl ShapeSpan {
                             start..end,
                             GlyphDecorationData {
                                 text_decoration: attrs.text_decoration,
-                                underline_metrics: ul_metrics,
-                                strikethrough_metrics: st_metrics,
-                                ascent,
+                                font: font_metrics,
                             },
                         ));
                     }
@@ -1262,9 +1235,7 @@ impl ShapeSpan {
                             covered_end..span_range.end,
                             GlyphDecorationData {
                                 text_decoration: default_attrs.text_decoration,
-                                underline_metrics: ul_metrics,
-                                strikethrough_metrics: st_metrics,
-                                ascent,
+                                font: font_metrics,
                             },
                         ));
                     }

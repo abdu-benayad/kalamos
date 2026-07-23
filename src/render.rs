@@ -65,10 +65,8 @@ fn draw_decoration_span<R: Renderer>(
                 .underline_color_opt
                 .or(span.color_opt)
                 .unwrap_or(default_color);
-            let thickness = (deco.underline_metrics.thickness * font_size)
-                .max(1.0)
-                .ceil();
-            let y = run.line_y - deco.underline_metrics.offset * font_size;
+            let thickness = (deco.font.underline.thickness * font_size).max(1.0).ceil();
+            let y = run.line_y - deco.font.underline.offset * font_size;
             renderer.rectangle(x_start as i32, y as i32, w, thickness as u32, color);
         }
         UnderlineStyle::Double => {
@@ -76,11 +74,9 @@ fn draw_decoration_span<R: Renderer>(
                 .underline_color_opt
                 .or(span.color_opt)
                 .unwrap_or(default_color);
-            let thickness = (deco.underline_metrics.thickness * font_size)
-                .max(1.0)
-                .ceil();
+            let thickness = (deco.font.underline.thickness * font_size).max(1.0).ceil();
             let gap = thickness;
-            let y = run.line_y - deco.underline_metrics.offset * font_size;
+            let y = run.line_y - deco.font.underline.offset * font_size;
             renderer.rectangle(x_start as i32, y as i32, w, thickness as u32, color);
             renderer.rectangle(
                 x_start as i32,
@@ -98,10 +94,10 @@ fn draw_decoration_span<R: Renderer>(
             .strikethrough_color_opt
             .or(span.color_opt)
             .unwrap_or(default_color);
-        let thickness = (deco.strikethrough_metrics.thickness * font_size)
+        let thickness = (deco.font.strikethrough.thickness * font_size)
             .max(1.0)
             .ceil();
-        let y = run.line_y - deco.strikethrough_metrics.offset * font_size;
+        let y = run.line_y - deco.font.strikethrough.offset * font_size;
         renderer.rectangle(x_start as i32, y as i32, w, thickness as u32, color);
     }
 
@@ -112,11 +108,9 @@ fn draw_decoration_span<R: Renderer>(
             .or(span.color_opt)
             .unwrap_or(default_color);
         // Reuse underline thickness for overline
-        let thickness = (deco.underline_metrics.thickness * font_size)
-            .max(1.0)
-            .ceil();
+        let thickness = (deco.font.underline.thickness * font_size).max(1.0).ceil();
         // clamped so it doesn't go above the line top.
-        let y = (run.line_y - deco.ascent * font_size).max(run.line_top);
+        let y = (run.line_y - deco.font.ascent * font_size).max(run.line_top);
         renderer.rectangle(x_start as i32, y as i32, w, thickness as u32, color);
     }
 }

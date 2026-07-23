@@ -11,6 +11,8 @@ pub use skrifa;
 #[cfg(feature = "peniko")]
 pub use linebender_resource_handle::FontData as PenikoFont;
 
+use crate::{DecorationMetrics, FontDecorationMetrics};
+
 use core::fmt;
 
 use alloc::sync::Arc;
@@ -104,6 +106,32 @@ impl Font {
 
     pub fn metrics(&self) -> &Metrics {
         &self.harfrust.borrow_owner().metrics
+    }
+
+    /// Where this font wants decoration lines drawn, in EM units — multiply by a font size to
+    /// get offsets and thicknesses at that size.
+    ///
+    /// A face that declares no underline or strikeout table falls back to the conventional
+    /// values (an underline an eighth of an em below the baseline, lines a fourteenth of an em
+    /// thick), so the result is always usable. A face with a zero `units_per_em` — a broken one
+    /// nothing can be normalized against — yields all zeroes.
+    pub fn decoration_metrics(&self) -> FontDecorationMetrics {
+        let metrics = self.metrics();
+        let upem = f32::from(metrics.units_per_em);
+        if upem == 0.0 {
+            return FontDecorationMetrics::default();
+        }
+        FontDecorationMetrics {
+            underline: DecorationMetrics {
+                offset: metrics.underline.map_or(-0.125, |d| d.offset / upem),
+                thickness: metrics.underline.map_or(1.0 / 14.0, |d| d.thickness / upem),
+            },
+            strikethrough: DecorationMetrics {
+                offset: metrics.strikeout.map_or(0.3, |d| d.offset / upem),
+                thickness: metrics.strikeout.map_or(1.0 / 14.0, |d| d.thickness / upem),
+            },
+            ascent: metrics.ascent / upem,
+        }
     }
 
     #[cfg(feature = "peniko")]
